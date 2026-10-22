@@ -35,7 +35,7 @@ polybot/
     ├── src/
     │   ├── app/              # rutas / entrada
     │   ├── components/       # UI reutilizable (ver desing.md §10)
-    │   ├── features/         # chat, lessons, plans, translate, progress, languages, settings
+    │   ├── features/         # home, chat, lessons, plans, translate, progress, languages, settings
     │   ├── lib/api/          # cliente HTTP y tipos del contrato
     │   └── styles/           # tokens y estilos base
     └── public/               # manifest, íconos, assets

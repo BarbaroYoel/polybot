@@ -1,4 +1,4 @@
-import { NavLink } from "react-router-dom";
+import { Link, useLocation } from "react-router-dom";
 import { Icon } from "./Icon";
 import type { IconName } from "./Icon";
 import { useActiveLanguage } from "../lib/language";
@@ -8,16 +8,24 @@ interface NavItem {
   to: string;
   label: string;
   icon: IconName;
-  end?: boolean;
+  /** Extra routes that keep this item active (ADR-011). */
+  alsoActiveOn?: string[];
 }
 
 const PRIMARY_NAV: NavItem[] = [
-  { to: "/", label: "Conversaciones", icon: "chat", end: true },
+  // Home and an open conversation are the same section (ADR-011).
+  { to: "/", label: "Conversaciones", icon: "chat", alsoActiveOn: ["/chat"] },
   { to: "/lessons", label: "Lecciones", icon: "book" },
   { to: "/plans", label: "Planes de estudio", icon: "calendar" },
   { to: "/translate", label: "Traducción en tiempo real", icon: "translate" },
   { to: "/progress", label: "Progreso", icon: "progress" },
 ];
+
+function isItemActive(item: NavItem, pathname: string): boolean {
+  if (pathname === item.to) return true;
+  if (pathname.startsWith(`${item.to}/`)) return true;
+  return Boolean(item.alsoActiveOn?.some((prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`)));
+}
 
 interface SidebarProps {
   open: boolean;
@@ -26,6 +34,7 @@ interface SidebarProps {
 
 export function Sidebar({ open, onClose }: SidebarProps) {
   const { languages, active, setActiveCode } = useActiveLanguage();
+  const { pathname } = useLocation();
 
   return (
     <nav className={`sidebar${open ? " sidebar--open" : ""}`} aria-label="Navegación principal">
@@ -40,18 +49,21 @@ export function Sidebar({ open, onClose }: SidebarProps) {
       </div>
 
       <ul className="sidebar__nav">
-        {PRIMARY_NAV.map((item) => (
-          <li key={item.to}>
-            <NavLink
-              to={item.to}
-              end={item.end}
-              className={({ isActive }) => `sidebar__link${isActive ? " sidebar__link--active" : ""}`}
-            >
-              <Icon name={item.icon} />
-              <span>{item.label}</span>
-            </NavLink>
-          </li>
-        ))}
+        {PRIMARY_NAV.map((item) => {
+          const isActive = isItemActive(item, pathname);
+          return (
+            <li key={item.to}>
+              <Link
+                to={item.to}
+                className={`sidebar__link${isActive ? " sidebar__link--active" : ""}`}
+                aria-current={isActive ? "page" : undefined}
+              >
+                <Icon name={item.icon} />
+                <span>{item.label}</span>
+              </Link>
+            </li>
+          );
+        })}
       </ul>
 
       <div className="sidebar__section">
@@ -93,13 +105,14 @@ export function Sidebar({ open, onClose }: SidebarProps) {
       </div>
 
       <div className="sidebar__footer">
-        <NavLink
+        <Link
           to="/settings"
-          className={({ isActive }) => `sidebar__link${isActive ? " sidebar__link--active" : ""}`}
+          className={`sidebar__link${pathname === "/settings" ? " sidebar__link--active" : ""}`}
+          aria-current={pathname === "/settings" ? "page" : undefined}
         >
           <Icon name="settings" />
           <span>Configuración</span>
-        </NavLink>
+        </Link>
       </div>
     </nav>
   );
