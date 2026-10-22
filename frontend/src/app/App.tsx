@@ -5,7 +5,6 @@ import { AppShell } from "../components/AppShell";
 import { ErrorState, LoadingState } from "../components/States";
 import { LanguageProvider } from "../lib/language";
 import {
-  LanguagesPage,
   LessonsPage,
   NotFoundPage,
   PlansPage,
@@ -14,6 +13,7 @@ import {
   TranslatePage,
 } from "../features/sections/pages";
 import { HomePage } from "../features/home/HomePage";
+import { LanguagesPage } from "../features/languages/LanguagesPage";
 
 const ChatPage = lazy(async () => {
   const module = await import("../features/chat/ChatPage");

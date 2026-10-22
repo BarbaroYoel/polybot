@@ -7,7 +7,11 @@ interface TopBarProps {
 }
 
 export function TopBar({ onOpenMenu }: TopBarProps) {
-  const { active } = useActiveLanguage();
+  const { active, status } = useActiveLanguage();
+
+  // The language badge waits for the API: no invented name and no invented level (F2 S9).
+  const contextName =
+    active?.name ?? (status === "loading" ? "Cargando idioma…" : "Sin idioma activo");
 
   return (
     <header className="topbar">
@@ -22,14 +26,16 @@ export function TopBar({ onOpenMenu }: TopBarProps) {
 
       <p className="topbar__context" aria-label="Idioma activo">
         <Icon name="globe" size={16} />
-        <span className="topbar__context-name">{active.name}</span>
-        <span className="topbar__level" title="Nivel actual (solo lectura)">
-          {active.level}
-        </span>
+        <span className="topbar__context-name">{contextName}</span>
+        {active && (
+          <span className="topbar__level" title="Nivel actual (solo lectura)">
+            {active.level}
+          </span>
+        )}
       </p>
 
       <div className="topbar__actions">
-        <button type="button" className="topbar__action" disabled title="La búsqueda llega con el backend (F2)" aria-label="Buscar">
+        <button type="button" className="topbar__action" disabled title="La búsqueda todavía no está implementada" aria-label="Buscar">
           <Icon name="search" />
         </button>
         <button type="button" className="topbar__action" disabled title="El perfil de usuario está pendiente de decisión (Q5)" aria-label="Perfil">

@@ -38,11 +38,35 @@
   font-weight: 600;
 }
 
-.home__new {
-  flex: 0 0 auto;
+/* Home-owned action button. It does not reuse the chat chips: chat.css ships with the lazy chat
+   chunk, so a cold load of `/` would render these buttons unstyled. */
+.home__new,
+.home__action {
   display: inline-flex;
   align-items: center;
+  justify-content: center;
+  min-height: 34px;
+  padding: 0 var(--space-3);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-pill);
+  background: var(--bg-app);
+  color: var(--text-primary);
+  font-size: var(--text-sm);
   white-space: nowrap;
+}
+
+.home__new:hover:not(:disabled),
+.home__action:hover {
+  background: var(--bg-hover);
+}
+
+.home__new {
+  flex: 0 0 auto;
+}
+
+.home__new:disabled {
+  color: var(--text-secondary);
+  opacity: 0.55;
 }
 
 .home__list {

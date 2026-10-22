@@ -1,51 +1,85 @@
-import { createContext, useCallback, useContext, useMemo, useState } from "react";
+import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
 import type { ReactNode } from "react";
-import { LANGUAGES } from "./fixtures";
-import type { LanguageProfile } from "./types";
+import type { ApiError } from "./api/client";
+import { listLanguages, updateLanguage } from "./api/languages";
+import type { LanguageProfile } from "./api/types";
+import type { AsyncStatus } from "./useAsync";
+import { useAsync } from "./useAsync";
 
 const STORAGE_KEY = "polybot.activeLanguage";
 
 interface LanguageContextValue {
+  status: AsyncStatus;
   languages: LanguageProfile[];
-  active: LanguageProfile;
-  setActiveCode: (code: string) => void;
+  /** The language with `is_active` on the server; `null` while loading, on error or when none is set. */
+  active: LanguageProfile | null;
+  error: ApiError | null;
+  /** Activates `code` on the server (`PATCH is_active`). Rejects with an `ApiError` the caller shows. */
+  setActiveCode: (code: string) => Promise<void>;
+  reload: () => void;
 }
 
 const LanguageContext = createContext<LanguageContextValue | null>(null);
 
-function readStoredCode(): string | null {
+/**
+ * Non-authoritative hint of the last language this browser saw active. It is never read to decide
+ * the active language — the server's `is_active` is the only source of truth (F2 S9) — it only
+ * keeps the value around so a later offline shell can remember the last context.
+ */
+function rememberCode(code: string): void {
   try {
-    return window.localStorage.getItem(STORAGE_KEY);
+    window.localStorage.setItem(STORAGE_KEY, code);
   } catch {
-    return null;
+    // No storage available: the active language lives in server state only.
   }
 }
 
 /**
- * Idioma activo único (desing.md §4). Persiste entre recargas para que la app
- * retome el idioma en el que estaba el usuario.
+ * Single active language (desing.md §4, AGENTS.md §3). The list comes from `GET /languages`, so
+ * changing `is_active` anywhere else is reflected on the next reload instead of being guessed.
  */
 export function LanguageProvider({ children }: { children: ReactNode }) {
-  const [activeCode, setActiveCodeState] = useState<string>(() => {
-    const stored = readStoredCode();
-    const match = LANGUAGES.find((language) => language.code === stored);
-    return match?.code ?? LANGUAGES[0]?.code ?? "en";
-  });
+  const { status, data, error, reload } = useAsync(listLanguages, []);
+  const [languages, setLanguages] = useState<LanguageProfile[]>([]);
 
-  const setActiveCode = useCallback((code: string) => {
-    setActiveCodeState(code);
-    try {
-      window.localStorage.setItem(STORAGE_KEY, code);
-    } catch {
-      // Sin almacenamiento disponible: el idioma activo vive solo en memoria.
-    }
-  }, []);
+  // The hook clears its data when a new load starts. The provider keeps the last known list so the
+  // shell does not blink on a reload; the server response always replaces it when it arrives.
+  useEffect(() => {
+    if (data) setLanguages(data);
+  }, [data]);
 
-  const value = useMemo<LanguageContextValue>(() => {
-    const fallback: LanguageProfile = { code: "en", name: "Inglés", level: "A1", conversationCount: 0 };
-    const active = LANGUAGES.find((language) => language.code === activeCode) ?? fallback;
-    return { languages: LANGUAGES, active, setActiveCode };
-  }, [activeCode, setActiveCode]);
+  const active = useMemo(
+    () => languages.find((language) => language.is_active) ?? null,
+    [languages],
+  );
+
+  useEffect(() => {
+    if (active) rememberCode(active.code);
+  }, [active]);
+
+  const setActiveCode = useCallback(
+    async (code: string) => {
+      const target = languages.find((language) => language.code === code);
+      // Activating the active language (or an unknown code) changes nothing on the server.
+      if (!target || target.is_active) return;
+
+      const updated = await updateLanguage(target.id, { is_active: true });
+      // Activating one language deactivates the previous one (docs/api-contract.md §3): mirror the
+      // response so the UI and the server agree without a second round trip.
+      setLanguages((current) =>
+        current.map((language) => {
+          if (language.id === updated.id) return updated;
+          return language.is_active ? { ...language, is_active: false } : language;
+        }),
+      );
+    },
+    [languages],
+  );
+
+  const value = useMemo<LanguageContextValue>(
+    () => ({ status, languages, active, error, setActiveCode, reload }),
+    [status, languages, active, error, setActiveCode, reload],
+  );
 
   return <LanguageContext.Provider value={value}>{children}</LanguageContext.Provider>;
 }

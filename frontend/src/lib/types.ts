@@ -1,11 +1,7 @@
-export type Level = "A1" | "A2" | "B1" | "B2" | "C1" | "C2";
-
-export interface LanguageProfile {
-  code: string;
-  name: string;
-  level: Level;
-  conversationCount: number;
-}
+/**
+ * UI view types. They stay camelCase and independent from the API: the mapping from the contract
+ * types (`src/lib/api/types.ts`) happens in the feature that consumes the data.
+ */
 
 export type Author = "tutor" | "user";
 
@@ -16,11 +12,4 @@ export interface Message {
   timeLabel: string;
   translation?: string;
   hasAudio?: boolean;
-}
-
-export interface Conversation {
-  id: string;
-  languageCode: string;
-  title: string;
-  messages: Message[];
 }
