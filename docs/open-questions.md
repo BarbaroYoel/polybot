@@ -26,7 +26,8 @@ El orden relativo se mantiene (usuario más oscuro que tutor), pero los valores 
 
 ## Q3 — Framework del frontend
 
-Ver `docs/stack.md` §Pendiente. Bloquea el esqueleto de `frontend/` (F1).
+**Estado: RESUELTA → ADR-010.** React 18 + Vite + TypeScript, CSS propio sobre los tokens de `desing.md` §3 y
+`react-router-dom`. Sin librería de UI ni framework de CSS.
 
 ## Q4 — Motor STT: confirmar "Cactus Whistle"
 
@@ -35,5 +36,5 @@ si soporta streaming y qué idiomas cubre. Bloquea F4, no F1.
 
 ## Q5 — ¿La PWA necesita autenticación en v0?
 
-Sin auth la API queda abierta en local. Define si el «perfil de usuario» del wireframe existe como entidad o es decorativo.
-Bloquea F2 en adelante.
+**Estado: RESUELTA → ADR-012.** Sin auth en v0: la API queda abierta en local y la decisión se retoma antes de
+exponerla. No hay entidad `user` en el modelo; el «perfil de usuario» del wireframe sigue decorativo.

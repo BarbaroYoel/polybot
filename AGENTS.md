@@ -54,18 +54,31 @@ Detalle completo en `docs/architecture.md`.
 
 ## 5. Comandos
 
-Hoy existe `frontend/` (F1). Estos son los únicos comandos válidos:
+Existen `backend/` (F2) y `frontend/` (F1). Estos son los únicos comandos válidos.
 
-| Qué | Comando | Dónde |
-|---|---|---|
-| Instalar dependencias | `npm install` | `frontend/` |
-| Servidor de desarrollo | `npm run dev` | `frontend/` → http://localhost:5173 |
-| Typecheck | `npm run typecheck` | `frontend/` |
-| Build de producción | `npm run build` | `frontend/` |
-| Previsualizar el build | `npm run preview` | `frontend/` |
+### Backend — `backend/`
 
-El backend todavía no existe: no hay comandos de Python, tests ni migraciones.
-Cuando se cree `backend/`, se agregan acá en el mismo commit que los introduce.
+| Qué | Comando |
+|---|---|
+| Instalar dependencias | `uv sync` |
+| Servidor de desarrollo | `uv run uvicorn app.main:app --reload` → http://localhost:8000 |
+| Tests | `uv run pytest` |
+| Formato y lint | `uv run ruff format` · `uv run ruff check` |
+| Aplicar migraciones | `uv run alembic upgrade head` |
+| Nueva migración | `uv run alembic revision --autogenerate -m "<mensaje>"` |
+| Cargar los datos de ejemplo | `uv run python -m app.adapters.db.seed` |
+
+### Frontend — `frontend/`
+
+| Qué | Comando |
+|---|---|
+| Instalar dependencias | `npm install` |
+| Servidor de desarrollo | `npm run dev` → http://localhost:5173 |
+| Typecheck | `npm run typecheck` |
+| Build de producción | `npm run build` |
+| Previsualizar el build | `npm run preview` |
+
+La API vive en `http://localhost:8000/api/v1` y la PWA la consume desde ahí; `VITE_API_BASE_URL` (en `frontend/.env`) cambia ese destino. Para que la PWA muestre datos, el backend necesita la base migrada y sembrada (`uv run alembic upgrade head` y el seed).
 
 No inventes comandos de build, test ni migración, y no ejecutes instaladores por iniciativa propia.
 
