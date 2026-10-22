@@ -10,7 +10,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 BACKEND_ROOT = Path(__file__).resolve().parents[2]
 REPOSITORY_ROOT = BACKEND_ROOT.parent
 
-DEFAULT_DATABASE_URL = "sqlite+pysqlite:///./polybot.db"
+DEFAULT_DATABASE_URL = "sqlite+aiosqlite:///./polybot.db"
 
 
 class Settings(BaseSettings):

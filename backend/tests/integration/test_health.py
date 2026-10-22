@@ -25,7 +25,7 @@ def test_health_sets_the_request_id_header(client: TestClient) -> None:
 
 
 def test_health_does_not_need_the_database(monkeypatch) -> None:
-    monkeypatch.setenv("DATABASE_URL", "sqlite+pysqlite:////nonexistent/polybot.db")
+    monkeypatch.setenv("DATABASE_URL", "sqlite+aiosqlite:////nonexistent/polybot.db")
 
     response = TestClient(create_app()).get("/api/v1/health")
 
