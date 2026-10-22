@@ -23,6 +23,8 @@
 .shell__main {
   display: grid;
   grid-template-rows: auto auto minmax(0, 1fr);
+  /* Same rule as `.chat`: an implicit auto column can grow past the shell and get clipped. */
+  grid-template-columns: minmax(0, 1fr);
   min-width: 0;
   height: 100dvh;
 }

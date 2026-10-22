@@ -13,6 +13,7 @@ import {
   SettingsPage,
   TranslatePage,
 } from "../features/sections/pages";
+import { HomePage } from "../features/home/HomePage";
 
 const ChatPage = lazy(async () => {
   const module = await import("../features/chat/ChatPage");
@@ -64,15 +65,16 @@ export function App() {
         <RouteErrorBoundary>
           <Routes>
             <Route element={<AppShell />}>
+              <Route index element={<HomePage />} />
+              <Route path="chat" element={<Navigate to="/" replace />} />
               <Route
-                index
+                path="chat/:conversationId"
                 element={
-                  <Suspense fallback={<LoadingState label="Cargando conversaciones…" />}>
+                  <Suspense fallback={<LoadingState label="Cargando conversación…" />}>
                     <ChatPage />
                   </Suspense>
                 }
               />
-              <Route path="chat" element={<Navigate to="/" replace />} />
               <Route path="lessons" element={<LessonsPage />} />
               <Route path="plans" element={<PlansPage />} />
               <Route path="translate" element={<TranslatePage />} />

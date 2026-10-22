@@ -89,10 +89,11 @@ Estos valores son **referencias iniciales**, no decisiones inamovibles. La versi
 
 ### Rutas conceptuales
 
-| Ruta sugerida | Vista |
+| Ruta | Vista |
 |---|---|
-| `/` o `/chat` | Conversaciones / tutor |
-| `/chat/:conversationId` | Conversación existente |
+| `/` | Inicio de conversaciones: tarjetas de resumen e historial del idioma activo |
+| `/chat` | Redirección a `/` (ruta heredada) |
+| `/chat/:conversationId` | Conversación abierta: hilo y compositor |
 | `/lessons` | Lecciones del idioma activo |
 | `/plans` | Planes de estudio |
 | `/translate` | Traducción e intérprete |
@@ -100,30 +101,54 @@ Estos valores son **referencias iniciales**, no decisiones inamovibles. La versi
 | `/languages` | Gestión de idiomas |
 | `/settings` | Preferencias |
 
-Las rutas son orientativas; pueden cambiar según la tecnología usada.
+Las rutas de las secciones son orientativas; pueden cambiar según la tecnología usada.
+La separación entre **inicio** (`/`) y **conversación** (`/chat/:conversationId`) es una decisión
+registrada (ADR-011): las tarjetas de resumen nunca se dibujan sobre el chat.
 
 ## 5. Layout principal — escritorio
 
 ### Estructura
 
+Inicio (`/`): tarjetas de resumen, aviso de datos de ejemplo e historial del idioma activo.
+
 ```text
 ┌────────────────────┬───────────────────────────────────────────────────────────┐
 │ Tutor de Idiomas   │ Hola, ¡sigamos aprendiendo!             Buscar / Perfil   │
 │                    ├───────────────────────────────────────────────────────────┤
-│ Conversaciones     │ [ Lección de hoy ] [ Meta semanal ] [ Próxima práctica ] │
+│ Conversaciones     │ [ Lección de hoy ] [ Meta semanal ] [ Próxima práctica ]  │
 │ Lecciones          │                                                           │
-│ Planes de estudio  │   Tutor: ¡Hola! ¿Qué te gustaría practicar hoy?          │
-│ Traducción         │          [Conversar] [Vocabulario] [Simular]              │
-│ Progreso           │                                                           │
-│ ─────────────────  │                          Tú: Quiero practicar francés.   │
-│ Mis idiomas      + │                                                           │
-│  Inglés · B1       │   Tutor: ¡Perfecto! ...                                   │
-│  Francés · A1      │   Bonjour ! ... [Audio]                                   │
-│  Alemán · B2       │   [No entiendo] [Más lento] [Traducir]                    │
+│ Planes de estudio  │   Aviso: datos de ejemplo, sin backend todavía            │
+│ Traducción         │                                                           │
+│ Progreso           │   Conversaciones en Francés           [Nueva conversación]│
+│ ─────────────────  │   ┌───────────────────────────────────────────────────┐   │
+│ Mis idiomas      + │   │ En un café · 3 mensajes · último 10:25        →   │   │
+│  Inglés · B1       │   └───────────────────────────────────────────────────┘   │
+│  Francés · A1      │                                                           │
+│  Alemán · B2       │                                                           │
 │                    │                                                           │
-│ Configuración      │ ┌───────────────────────────────────────────────────────┐ │
-│                    │ │ Escribe o habla...             [Voz] [Mic] [Enviar] │ │
-└────────────────────┴─┴───────────────────────────────────────────────────────┴─┘
+│ Configuración      │                                                           │
+└────────────────────┴───────────────────────────────────────────────────────────┘
+```
+
+Conversación (`/chat/:conversationId`): solo hilo y compositor; sin tarjetas.
+
+```text
+┌────────────────────┬───────────────────────────────────────────────────────────┐
+│ Tutor de Idiomas   │ Hola, ¡sigamos aprendiendo!             Buscar / Perfil   │
+│                    ├───────────────────────────────────────────────────────────┤
+│ Conversaciones     │   Tutor: ¡Hola! ¿Qué te gustaría practicar hoy?           │
+│ Lecciones          │          [Conversar] [Vocabulario] [Simular]              │
+│ Planes de estudio  │                                                           │
+│ Traducción         │                          Tú: Quiero practicar francés.    │
+│ Progreso           │                                                           │
+│ ─────────────────  │   Tutor: ¡Perfecto! ...                                   │
+│ Mis idiomas      + │   Bonjour ! ... [Audio]                                   │
+│  Inglés · B1       │   [No entiendo] [Más lento] [Traducir]                    │
+│  Francés · A1      │                                                           │
+│  Alemán · B2       │ ┌───────────────────────────────────────────────────────┐ │
+│                    │ │ Escribe o habla...             [Voz] [Mic] [Enviar]   │ │
+│ Configuración      │ └───────────────────────────────────────────────────────┘ │
+└────────────────────┴───────────────────────────────────────────────────────────┘
 ```
 
 ### Medidas orientativas
@@ -131,26 +156,41 @@ Las rutas son orientativas; pueden cambiar según la tecnología usada.
 - Sidebar: **260–300px**; puede contraerse a modo íconos u ocultarse.
 - Cabecera: **64–80px** de alto.
 - Área principal: ocupa el resto del ancho, sin un panel lateral permanente.
-- Tarjetas de resumen: fila de **3 tarjetas** sobre el chat en la vista inicial.
+- Tarjetas de resumen: fila de **3 tarjetas** en la pantalla de inicio; nunca sobre la conversación.
 - Chat: zona de mensajes con scroll independiente y compositor pegado abajo.
 - Compositor: siempre visible mientras se conversa, respetando el teclado y las áreas seguras.
+- Cada bloque del área principal ocupa su **propia fila** de la grilla: nada de contenido que se dibuje encima de otro bloque, y nada fuera del viewport.
 
 ## 6. Especificación de pantallas
 
-### 6.1 Conversaciones — pantalla principal
+### 6.1 Conversaciones — inicio y conversación
 
 **Objetivo:** empezar o continuar una práctica con la menor fricción posible.
 
-**Cabecera:**
+Son dos pantallas distintas (ADR-011). El inicio reúne el estado del día y el historial; la conversación
+reúne el hilo y el compositor. Ninguna pantalla dibuja su contenido sobre la otra.
+
+**Cabecera (común a las dos):**
 - Saludo breve: «Hola, ¡sigamos aprendiendo!».
 - Subtítulo: «Practica, conversa y mejora cada día».
 - Acciones: búsqueda, notificaciones (si se implementan), usuario.
 - Indicador visible del **idioma activo y nivel**, especialmente si hay varios idiomas.
 
-**Tarjetas de resumen (solo en inicio o parte superior del chat):**
+#### 6.1.1 Inicio (`/`)
+
+**Tarjetas de resumen (solo en esta pantalla):**
 - **Lección de hoy:** nombre breve, progreso (ej. 3/5), acceso a continuar.
 - **Meta semanal:** estado (ej. 4 de 7 conversaciones) y representación visual sencilla.
 - **Próxima práctica:** fecha, hora y tema; acceso a iniciar o revisar.
+
+**Nuevo chat e historial:**
+- Botón destacado pero discreto «Nueva conversación».
+- Agrupar o filtrar historial por idioma: la lista muestra **solo** las conversaciones del idioma activo.
+- Títulos breves generados automáticamente, renombrables por el usuario.
+- Cada fila del historial abre su conversación en `/chat/:conversationId`.
+- Estado vacío explícito cuando el idioma activo todavía no tiene conversaciones.
+
+#### 6.1.2 Conversación (`/chat/:conversationId`)
 
 **Zona de mensajes:**
 - Mensajes del tutor alineados a la izquierda; los del usuario a la derecha.
@@ -160,6 +200,7 @@ Las rutas son orientativas; pueden cambiar según la tecnología usada.
 - Respuestas del tutor pueden incluir **audio, ejercicios, traducciones, correcciones o tarjetas de vocabulario**.
 - Sugerencias rápidas después de un mensaje: «Practicar una conversación», «Repasar vocabulario», «Simular una situación», «Pedir una explicación».
 - Ante frases del tutor: «No entiendo», «Más lento», «Traducir» y botón para volver a escuchar.
+- La zona de mensajes tiene scroll propio: el hilo nunca se dibuja encima del aviso ni del compositor.
 
 **Compositor inferior:**
 - Placeholder: «Escribe o habla…».
@@ -167,11 +208,9 @@ Las rutas son orientativas; pueden cambiar según la tecnología usada.
 - `Enter` envía; `Shift + Enter` inserta salto de línea.
 - Botones deshabilitados cuando la acción no corresponda; no usar controles decorativos que aparenten funcionar.
 - Mostrar estado «Escuchando…», «Transcribiendo…», «Pensando…» o «Reproduciendo…» según el flujo real.
+- Siempre visible mientras se conversa: el aviso de prototipo, si aparece, va arriba del compositor, dentro de la misma fila.
 
-**Nuevo chat e historial:**
-- Botón destacado pero discreto «Nueva conversación».
-- Agrupar o filtrar historial por idioma.
-- Títulos breves generados automáticamente, renombrables por el usuario.
+**Conversación inexistente:** estado de error con recuperación explícita (volver al inicio), sin inventar datos.
 
 ### 6.2 Lecciones
 
@@ -283,21 +322,21 @@ Mostrar mensajes de error claros y acciones de recuperación como «Reintentar»
 ### Escritorio (≥ 1024px)
 
 - Sidebar persistente a la izquierda.
-- Tarjetas de resumen en tres columnas cuando el espacio lo permita.
+- Tarjetas de resumen en tres columnas cuando el espacio lo permita, en la pantalla de inicio.
 - Chat central con ancho contenido.
 - Compositor fijo en la parte inferior del área de chat.
 
 ### Tablet (768–1023px)
 
 - Sidebar colapsable.
-- Tarjetas de resumen en una o dos columnas.
+- Tarjetas de resumen en una o dos columnas, en la pantalla de inicio.
 - Priorizar el contenido del chat y la entrada de texto.
 
 ### Móvil (< 768px)
 
 - Sidebar como **drawer** accesible mediante menú.
 - Cabecera compacta con idioma activo.
-- Resúmenes apilados u ocultables en la pantalla de conversación.
+- Resúmenes apilados en una columna en la pantalla de inicio; la pantalla de conversación **no** muestra tarjetas.
 - Compositor y botones táctiles adaptados a pantalla pequeña.
 - Área de mensajes preparada para la aparición del teclado virtual.
 - Modo voz con controles grandes para iniciar, silenciar y finalizar.

@@ -79,6 +79,10 @@ export const QUICK_ACTIONS = [
   "Pedir una explicación",
 ];
 
-export function findConversation(languageCode: string): Conversation | null {
-  return CONVERSATIONS.find((conversation) => conversation.languageCode === languageCode) ?? null;
+export function listConversations(languageCode: string): Conversation[] {
+  return CONVERSATIONS.filter((conversation) => conversation.languageCode === languageCode);
+}
+
+export function findConversationById(id: string | undefined): Conversation | null {
+  return CONVERSATIONS.find((conversation) => conversation.id === id) ?? null;
 }

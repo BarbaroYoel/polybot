@@ -17,6 +17,7 @@ Cada fase termina con algo verificable por un humano. Estado actual: **F0**.
 Alcance: `desing.md` §13, puntos 1–5. Detalle y evidencia: `odd/tasks/f1-pwa-shell.md`.
 
 - [x] Shell con sidebar, cabecera y navegación (todas las secciones).
+- [x] Inicio con las tarjetas de resumen y el historial del idioma activo, separado de la conversación (`/` y `/chat/:conversationId`, ADR-011).
 - [x] Pantalla de conversación completa: mensajes, sugerencias rápidas, compositor.
 - [x] Selector de idioma con contexto persistente entre recargas.
 - [x] Vistas base de Lecciones, Planes, Traducción y Progreso con datos de ejemplo identificados.
@@ -25,6 +26,8 @@ Alcance: `desing.md` §13, puntos 1–5. Detalle y evidencia: `odd/tasks/f1-pwa-
 - [x] Build y typecheck verdes; verificación de checklist §14 registrada en el documento de la feature.
 
 **Verificación:** checklist de `desing.md` §14 completa (tabla en `odd/tasks/f1-pwa-shell.md` §Verificación).
+La separación inicio / conversación se verificó con una sonda de geometría en Chrome headless sobre ocho viewports
+(`odd/tasks/chat-home-split.md`).
 El permiso de micrófono queda explícitamente para F4, cuando exista el micrófono.
 
 ## F2 — Esqueleto del backend y contrato real

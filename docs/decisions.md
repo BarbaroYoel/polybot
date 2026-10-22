@@ -125,6 +125,37 @@ Solo entran decisiones confirmadas por el humano. Las propuestas viven en `docs/
 
 ---
 
+## ADR-011 — Inicio separado de la conversación
+
+**Estado:** aceptada · **Fecha:** 2026-10-22 · **Corrige:** defecto de layout de F1
+
+**Contexto.** En F1 las tres tarjetas de resumen y el hilo vivían en la misma pantalla. `ChatPage` renderizaba
+cuatro hijos (tarjetas, aviso, hilo, compositor) dentro de una grilla de **tres** filas: la fila `minmax(0, 1fr)`
+caía sobre el aviso, `.chat__scroll` quedaba en fila `auto` y tomaba alto de contenido, y el hilo desbordaba la
+grilla y se dibujaba **encima** del aviso y de las tarjetas. Con ventanas bajas el compositor quedaba empujado
+fuera del área visible. El humano reportó el síntoma: «la parte del chat aparece encima de unos textos y no se
+logra diferenciar».
+
+**Decisión.** Se separan dos rutas con responsabilidades distintas, y se conservan los textos de las tarjetas:
+
+| Ruta | Contenido |
+|---|---|
+| `/` | Inicio: tarjetas de resumen, aviso de datos de ejemplo e historial del idioma activo |
+| `/chat/:conversationId` | Conversación: solo hilo y compositor |
+| `/chat` | Redirección a `/` (ruta heredada) |
+
+Regla de layout que acompaña la decisión: **cada bloque del área principal ocupa su propia fila** de la grilla y la
+grilla declara columnas `minmax(0, 1fr)` para que ningún ítem crezca más allá del contenedor. El hilo hace scroll
+dentro de su propio contenedor y el compositor permanece dentro del viewport. Ningún bloque se posiciona para
+dibujarse encima de otro.
+
+**Consecuencias.** `desing.md` §4, §5, §6.1 y §9 describen las dos pantallas. El historial del inicio se filtra por
+`language_id` (regla de AGENTS.md §3) y en F2 lo alimenta el backend; hoy usa datos de ejemplo. El sidebar marca
+«Conversaciones» como activo también dentro de una conversación. Verificado con una sonda de geometría en Chrome
+headless sobre ocho viewports: sin solapamiento y sin contenido fuera del viewport en `/` y `/chat/:id`.
+
+---
+
 ## Precedencia entre el documento y el wireframe
 
 Si el texto de `desing.md` y la imagen `grayscale_language_tutor_chat_ui.png` difieren: **manda el texto**.
