@@ -1,6 +1,8 @@
+import { Component, Suspense, lazy } from "react";
+import type { ErrorInfo, ReactNode } from "react";
 import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 import { AppShell } from "../components/AppShell";
-import { EmptyState } from "../components/States";
+import { ErrorState, LoadingState } from "../components/States";
 import { LanguageProvider } from "../lib/language";
 import {
   LanguagesPage,
@@ -12,31 +14,75 @@ import {
   TranslatePage,
 } from "../features/sections/pages";
 
+const ChatPage = lazy(async () => {
+  const module = await import("../features/chat/ChatPage");
+  return { default: module.ChatPage };
+});
+
+interface BoundaryProps {
+  children: ReactNode;
+}
+
+interface BoundaryState {
+  error: Error | null;
+}
+
+class RouteErrorBoundary extends Component<BoundaryProps, BoundaryState> {
+  state: BoundaryState = { error: null };
+
+  static getDerivedStateFromError(error: Error): BoundaryState {
+    return { error };
+  }
+
+  componentDidCatch(error: Error, info: ErrorInfo): void {
+    console.error("Route error", error, info.componentStack);
+  }
+
+  render(): ReactNode {
+    const { error } = this.state;
+    if (error) {
+      return (
+        <ErrorState
+          title="Algo se rompió en esta pantalla"
+          description={error.message}
+          action={
+            <button type="button" className="chips__item" onClick={() => this.setState({ error: null })}>
+              Reintentar
+            </button>
+          }
+        />
+      );
+    }
+    return this.props.children;
+  }
+}
+
 export function App() {
   return (
     <LanguageProvider>
       <BrowserRouter>
-        <Routes>
-          <Route element={<AppShell />}>
-            <Route
-              index
-              element={
-                <EmptyState
-                  title="Carcasa lista"
-                  description="La navegación y los idiomas ya funcionan. La pantalla de conversación llega en el próximo commit."
-                />
-              }
-            />
-            <Route path="chat" element={<Navigate to="/" replace />} />
-            <Route path="lessons" element={<LessonsPage />} />
-            <Route path="plans" element={<PlansPage />} />
-            <Route path="translate" element={<TranslatePage />} />
-            <Route path="progress" element={<ProgressPage />} />
-            <Route path="languages" element={<LanguagesPage />} />
-            <Route path="settings" element={<SettingsPage />} />
-            <Route path="*" element={<NotFoundPage />} />
-          </Route>
-        </Routes>
+        <RouteErrorBoundary>
+          <Routes>
+            <Route element={<AppShell />}>
+              <Route
+                index
+                element={
+                  <Suspense fallback={<LoadingState label="Cargando conversaciones…" />}>
+                    <ChatPage />
+                  </Suspense>
+                }
+              />
+              <Route path="chat" element={<Navigate to="/" replace />} />
+              <Route path="lessons" element={<LessonsPage />} />
+              <Route path="plans" element={<PlansPage />} />
+              <Route path="translate" element={<TranslatePage />} />
+              <Route path="progress" element={<ProgressPage />} />
+              <Route path="languages" element={<LanguagesPage />} />
+              <Route path="settings" element={<SettingsPage />} />
+              <Route path="*" element={<NotFoundPage />} />
+            </Route>
+          </Routes>
+        </RouteErrorBoundary>
       </BrowserRouter>
     </LanguageProvider>
   );
