@@ -1,0 +1,20 @@
+{
+  "name": "Polybot — Tutor de idiomas",
+  "short_name": "Polybot",
+  "description": "Practica idiomas conversando con un tutor de IA por texto o voz.",
+  "lang": "es",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#ffffff",
+  "theme_color": "#ffffff",
+  "icons": [
+    {
+      "src": "/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ]
+}

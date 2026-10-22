@@ -1,0 +1,39 @@
+/* Tokens de desing.md §3 — fuente única de color y forma (ADR-009).
+   Ningún componente define un color propio: todo sale de acá. */
+:root {
+  --bg-app: #ffffff;
+  --bg-sidebar: #f5f5f5;
+  --bg-surface: #fafafa;
+  --bg-hover: #ececec;
+  --bg-user-message: #ededed;
+  --text-primary: #171717;
+  --text-secondary: #666666;
+  --border-subtle: #e5e5e5;
+  --accent-neutral: #555555;
+
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 18px;
+  --radius-pill: 999px;
+
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+  --space-6: 32px;
+
+  --font-sans: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto,
+    "Helvetica Neue", Arial, sans-serif;
+  --text-xs: 12px;
+  --text-sm: 13px;
+  --text-base: 16px;
+  --text-lg: 20px;
+  --text-xl: 24px;
+
+  --control-height: 40px;
+  --sidebar-width: 280px;
+  --content-max: 900px;
+
+  --focus-ring: 0 0 0 2px var(--bg-app), 0 0 0 5px var(--accent-neutral);
+}
