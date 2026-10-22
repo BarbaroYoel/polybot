@@ -1,0 +1,98 @@
+# F2 — Esqueleto del backend y contrato real
+
+Fase F2 de `docs/roadmap.md`. Rama: `feat/f2-backend-skeleton` (apilada sobre `feat/f1-pwa-shell`, sin mergear a `main`).
+Autorizado por el humano en L1; las decisiones de stack en L2.
+
+## Specs
+
+**S1 — Stack decidido (L2).** Base de datos: «SQLite solo por ahora» — un solo motor, sin servicio externo ni
+Docker; migrar a PostgreSQL es una decisión aparte y no se anticipa en el modelo. ORM: «SQLAlchemy 2 + Alembic».
+Entorno: «uv». Autenticación: «Sin auth en v0» — la API queda abierta en local, no hay entidad `user` y el
+«perfil de usuario» del wireframe sigue decorativo. Testing backend: propuesta registrada en `docs/stack.md`
+(`pytest` + `httpx`), aplicada acá; no es una decisión nueva.
+
+**S2 — Alcance de la fase (L1).** `docs/roadmap.md` §F2, literal: «FastAPI con `/health`, configuración tipada,
+sobre de error uniforme», «Implementación de `/languages` y `/conversations` con persistencia», «Iteración del
+contrato contra la UI, sin romper `docs/api-contract.md`». Verificación de la fase: «la PWA de F1 consume datos
+reales en esas dos secciones».
+
+**S3 — `/health` responde exactamente lo del contrato.** `GET /api/v1/health` → `{ "status": "ok", "version": "..." }`,
+sin autenticación y sin tocar la base.
+
+**S4 — Todo error sale en el sobre del contrato.** `docs/api-contract.md` §1: «Errores: siempre el sobre del punto
+4, nunca HTML ni texto plano». Forma: `{ "error": { "code", "message", "details", "request_id" } }`. `code` estable
+y en inglés; `message` en español, accionable. Incluye los 422 de validación de FastAPI (contrato §4: «422 | Error
+de validación de esquema (FastAPI)») y cualquier excepción no prevista, que no filtra trazas al cliente.
+
+**S5 — Configuración tipada, sin secretos en el repo.** Variables de `docs/env.example` (`APP_ENV`, `APP_DEBUG`,
+`APP_BASE_URL`, `CORS_ORIGINS`, `DATABASE_URL`) cargadas con `pydantic-settings`. App sin `.env` arranca con
+defaults de desarrollo seguros; ninguna credencial en código. CORS restringido a `CORS_ORIGINS`.
+
+**S6 — `/languages` implementa la tabla del contrato.** `GET /languages` lista los no archivados; `POST /languages`
+agrega (`code`, `level`, `explanation_language`); `PATCH /languages/{id}` cambia nivel, meta o `is_active`, y
+activar uno desactiva el anterior (contrato: «Activar uno desactiva el anterior»); `DELETE /languages/{id}` archiva
+de forma blanda. Un `code` repetido responde 409, no 500. Campos y tipos según el bloque `LanguageProfile` de
+`docs/api-contract.md` §2.
+
+**S7 — `/conversations` implementa la tabla del contrato.** `GET /conversations?language_id=&cursor=` devuelve el
+historial del idioma, «más recientes primero», paginado como `{ "items": [...], "next_cursor": null }`;
+`POST /conversations` crea (`language_id`, `mode`, `title?`); `GET /conversations/{id}` devuelve la conversación con
+sus mensajes paginados; `PATCH /conversations/{id}` renombra; `DELETE /conversations/{id}` elimina. Cada conversación
+lleva `message_count` y `last_message_at` del contrato §2.
+
+**S8 — Datos aislados por idioma.** AGENTS.md §3: «Toda consulta de conversaciones, lecciones, planes y progreso se
+filtra por `language_id`». Pedir una conversación de otro idioma responde 404 (contrato §4: «Recurso inexistente o
+ajeno al idioma activo»), no 403 ni una conversación ajena.
+
+**S9 — La PWA consume datos reales en esas dos secciones.** Inicio (`/`), conversación (`/chat/:id`) y `/languages`
+leen de la API en lugar de `frontend/src/lib/fixtures.ts`. Los estados de carga y error ya existen y se usan; los
+fixtures quedan solo como datos de ejemplo del seed del backend. Sin backend levantado la UI muestra el estado de
+error, no un historial inventado.
+
+**S10 — Documentación al día.** `docs/stack.md` mueve a **Decidido** las filas de base de datos, ORM, gestor de
+paquetes, auth y testing backend; `docs/decisions.md` registra ADR-012; `docs/roadmap.md` marca F2; `AGENTS.md` §5
+suma los comandos del backend; `docs/open-questions.md` marca Q5 resuelta.
+
+## Assumptions
+
+- SQLite y PostgreSQL comparten el modelo: solo tipos portables (`String`, `Integer`, `Boolean`, `DateTime`,
+  `JSON` textual). Nada de `JSONB`, `ARRAY`, `ENUM` nativo ni `UUID` de Postgres, aunque el contrato exponga ids UUID
+  como string.
+- Los comandos nuevos del backend viven en `backend/` y se documentan en `AGENTS.md` §5 en el mismo commit que los
+  introduce.
+- `POST /conversations/{id}/messages` y el SSE quedan para F3: sin motor `LLM` no hay turno del tutor. F2 solo
+  persiste y lee mensajes existentes (los del seed).
+
+## Tasks
+
+| ID | Qué | Specs | Estado | Commit |
+|---|---|---|---|---|
+| T1 | Esqueleto: proyecto `uv`, `pyproject.toml`, `ruff`, `pytest`, config tipada, app factory, `request_id`, sobre de error, `/health` | S1, S3, S4, S5 | pendiente | — |
+| T2 | Persistencia: entidades de dominio, `ports/`, modelos y repositorios SQLAlchemy, migración Alembic inicial, seed con los datos de ejemplo | S1, S6, S7 | pendiente | — |
+| T3 | API v1: `/languages` y `/conversations` completos, casos de uso en `application/`, tests de integración | S4, S6, S7, S8 | pendiente | — |
+| T4 | Frontend contra la API: cliente HTTP, tipos del contrato, inicio, conversación y `/languages` con datos reales | S9 | pendiente | — |
+| T5 | Docs y verificación de la fase: ADR-012, `stack.md`, `roadmap.md`, `api-contract.md`, `AGENTS.md` §5, Q5; suite backend y typecheck/build del frontend | S1, S10 | pendiente | — |
+
+## Log
+
+**L1** — Pedido original, literal:
+
+> vamos a hacer lo de los commits y luego a implentar F@
+>
+> vamos a hacer lo de los commits y luego a implentar F2
+
+**L2** — Decisiones de stack, elegidas por el humano en el cuestionario previo a escribir código:
+
+> 1. ¿Qué base de datos usamos desde F2? — **SQLite solo por ahora**
+> 2. ¿Y para persistencia? — **SQLAlchemy 2 + Alembic (propuesta registrada)**
+> 3. ¿Gestor de paquetes y entorno de Python? — **uv (propuesta registrada)**
+> 4. ¿La PWA/API necesita autenticación en v0? — **Sin auth en v0 (propuesta registrada)**
+
+Consecuencias declaradas en las opciones elegidas: migrar a PostgreSQL queda como decisión aparte y `Q5` de
+`docs/open-questions.md` queda resuelta sin entidad `user` en el modelo de F2.
+
+**L3** — El commit de la separación inicio / conversación quedó en `e1708e4` sobre `feat/f1-pwa-shell`. F2 se apila
+encima de esa rama; integrarla a `main` sigue siendo decisión del humano y no bloquea esta fase.
+
+**L4** — Entorno disponible: `uv 0.11.23`, Python 3.14.4, Node 24.19.0. `docs/stack.md` pide confirmar Python
+«3.12 o superior»: se fija `requires-python = ">=3.12"` y el intérprete instalado se usa tal cual.
