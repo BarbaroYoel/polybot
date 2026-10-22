@@ -70,8 +70,8 @@ suma los comandos del backend; `docs/open-questions.md` marca Q5 resuelta.
 | T1 | Esqueleto: proyecto `uv`, `pyproject.toml`, `ruff`, `pytest`, config tipada, app factory, `request_id`, sobre de error, `/health` | S1, S3, S4, S5 | hecho | `a7adab6` |
 | T2 | Persistencia: entidades de dominio, `ports/`, modelos y repositorios SQLAlchemy, migración Alembic inicial, seed con los datos de ejemplo | S1, S6, S7 | hecho | `fc7a812` |
 | T3 | API v1: `/languages` y `/conversations` completos, casos de uso en `application/`, tests de integración | S4, S6, S7, S8 | hecho | siguiente unidad |
-| T4 | Frontend contra la API: cliente HTTP, tipos del contrato, inicio, conversación y `/languages` con datos reales | S9 | pendiente | — |
-| T5 | Docs y verificación de la fase: ADR-012, `stack.md`, `roadmap.md`, `api-contract.md`, `AGENTS.md` §5, Q5; suite backend y typecheck/build del frontend | S1, S10 | pendiente | — |
+| T4 | Frontend contra la API: cliente HTTP, tipos del contrato, inicio, conversación y `/languages` con datos reales | S9 | hecho | siguiente unidad |
+| T5 | Docs y verificación de la fase: ADR-012, `stack.md`, `roadmap.md`, `api-contract.md`, `AGENTS.md` §5, Q5; suite backend y typecheck/build del frontend | S1, S10 | hecho | cierre |
 
 ## Log
 
@@ -117,3 +117,36 @@ También se agrega la lista cerrada de códigos de error estables.
 
 **L9** — Al escribir los tests de conteo de la base apareció una dependencia implícita: `sqlalchemy` necesita el
 extra `asyncio` (greenlet) y SQLite asíncrono necesita `aiosqlite`. Ambas quedan declaradas en `pyproject.toml`.
+
+**L10** — T4 se delegó a un worker acotado (`gentle-ai-worker`) por tamaño de contexto, con superficies de edición
+explícitas y sin permiso de commit. Entregó el cliente API, los tipos del contrato, `useAsync`, el provider de
+idioma contra el servidor, inicio/chat/`/languages` reales y la limpieza de `fixtures.ts`; reportó explícitamente que
+no había verificado en navegador.
+
+**L11** — Esa falta de verificación escondía un defecto real: el probe con Chrome headless encontró que
+`/chat/<id>` de una conversación de **otro** idioma caía en «No encontramos esa conversación», porque el frontend
+mandaba `language_id` como guarda con el idioma activo. La guarda (S8) es correcta para el contrato, pero
+`desing.md` §6.6 pide «cambiar de idioma sin perder la conversación anterior» y §8 que el contexto se actualice. Se
+resuelve en la UI: `ChatPage` carga sin guarda y activa el idioma de la conversación (`PATCH is_active`); la guarda
+sigue disponible y testeada del lado de la API para cualquier otro consumidor. El probe confirma el cambio de
+contexto (Francés/A1 en la cabecera), la persistencia del cambio en el servidor y el 404 de una conversación
+inexistente.
+
+**L12** — Cierre de la fase: los cuatro commits de la rama son `a7adab6` (T1), `fc7a812` (T2), `a90d287` (T3) y el
+commit de T4; el de T5 es este. La rama F2 queda apilada sobre `feat/f1-pwa-shell`, que sigue sin mergear a `main`:
+integrar ambas es decisión del humano.
+
+## Verificación
+
+Todo ejecutado sobre el árbol de trabajo de la rama `feat/f2-backend-skeleton`.
+
+| Qué | Comando | Resultado |
+|---|---|---|
+| Tests del backend | `uv run pytest` en `backend/` | `37 passed` sobre una base migrada por Alembic |
+| Lint y formato | `uv run ruff format --check` · `uv run ruff check` | sin cambios pendientes; `All checks passed!` |
+| Significancia de los tests | dos mutaciones sobre `get_conversation_detail` (quitar la guarda) y `PATCH is_active` (quitar la desactivación) | cada una rompió exactamente su test; revertidas → 37 en verde |
+| Migración y seed | `uv run alembic upgrade head` · `uv run python -m app.adapters.db.seed` | 3 idiomas, 2 conversaciones, 7 mensajes; la segunda corrida no duplica nada |
+| API real | `uvicorn` + `curl` sobre los 9 casos: idiomas, historial, detalle paginado, guarda de idioma ajeno, crear, renombrar, archivar, archivar el activo, cursor inválido | respuestas y códigos de error del contrato |
+| Typecheck y build del frontend | `npm run typecheck` · `npm run build` en `frontend/` | sin errores; `✓ built` |
+| Sonda en navegador | Chrome headless (`--dump-dom`) contra `vite preview` conectado a la API real: `/`, `/languages`, `/chat/<fr>`, `/chat/<inexistente>` | inicio con el historial real, `/languages` con las acciones, hilo real y cambio de contexto a Francés/A1, recuperación ante id inexistente |
+| Sin backend | se detuvo `uvicorn` y se repitió la sonda de `/` | estado de error con «Reintentar», sin conversaciones inventadas |

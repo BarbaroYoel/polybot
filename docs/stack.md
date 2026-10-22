@@ -13,20 +13,21 @@ con una propuesta explícita. Un agente no promueve una propuesta a decisión po
 | Frontend | **React 18 + Vite + TypeScript**, CSS propio sobre los tokens de `desing.md` §3, `react-router-dom` | Sin librería de UI ni framework de CSS. |
 | UI | Español, monocromática minimalista | Wireframe en grises; marca definitiva fuera de alcance. |
 | Acoplamiento | Frontend independiente del harness | La UI solo habla HTTP/SSE con la API. |
+| Base de datos (2026-10-22) | **SQLite** (`sqlite+aiosqlite`) | Único motor en v0 (ADR-012). PostgreSQL queda como decisión aparte. |
+| ORM / migraciones (2026-10-22) | **SQLAlchemy 2 asíncrono + Alembic** | Una sola URL asíncrona para la app y las migraciones. |
+| Gestor de paquetes Python (2026-10-22) | **`uv`** | Python `>=3.12`; `backend/uv.lock` versionado. |
+| Autenticación (2026-10-22) | **Sin auth en v0** | API abierta en local; se decide antes de exponerla (ADR-012, cierra Q5). |
+| Testing backend (2026-10-22) | **pytest + httpx** | `backend/tests/{unit,integration}`; la API se prueba sobre una base migrada. |
 
 ## Pendiente (con propuesta, sin confirmar)
 
 | Área | Estado | Propuesta | Qué bloquea |
 |---|---|---|---|
 | Audio → texto (STT) | Pendiente de validar | Modelo mencionado por el usuario como **"Cactus Whistle"**: hay que confirmar nombre exacto, si corre local o en servidor, streaming y cobertura de idiomas | Fase de voz. |
-| Base de datos | Pendiente | PostgreSQL; SQLite solo para desarrollo local | Modelo de datos y migraciones. |
-| ORM / migraciones | Pendiente | SQLAlchemy 2 + Alembic | Bloqueado por la base. |
+| Base de datos de producción | Pendiente | PostgreSQL; la v0 usa SQLite (ADR-012) | Despliegue. |
 | Motor del tutor | Pendiente | Contrato propio `LLM` con un proveedor inicial; prompt del tutor versionado en el repo | Chat real. |
 | Streaming de texto | Pendiente | SSE para respuestas del tutor; WebSocket solo para intérprete | Chat real. |
-| Autenticación | Pendiente | Sin auth en v0 (uso local); decidir antes de exponer la API | Despliegue. |
 | Despliegue | Pendiente | Contenedor único (API + Piper) + estáticos de la PWA | Nada por ahora. |
-| Gestor de paquetes Python | Pendiente | `uv` | Arranque del backend. |
-| Testing backend | Pendiente | `pytest` + `httpx` | Arranque del backend. |
 | Testing frontend | Pendiente | `vitest` + Testing Library; Playwright para flujos | Arranque del frontend. |
 | Gestor de paquetes JS | Decidido: `npm` | — | — |
 

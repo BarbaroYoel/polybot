@@ -156,6 +156,39 @@ headless sobre ocho viewports: sin solapamiento y sin contenido fuera del viewpo
 
 ---
 
+## ADR-012 — SQLite, SQLAlchemy 2 + Alembic, `uv` y sin auth en v0
+
+**Estado:** aceptada · **Fecha:** 2026-10-22
+
+**Contexto.** F2 necesita levantar el backend con persistencia real y `docs/stack.md` tenía cinco decisiones
+pendientes que bloqueaban el arranque: base de datos, ORM, gestor de paquetes, autenticación y testing.
+
+**Decisión.**
+
+1. **SQLite** como único motor por ahora (`sqlite+aiosqlite:///./polybot.db`); no hay PostgreSQL en desarrollo.
+2. **SQLAlchemy 2 en modo asíncrono + Alembic** para el esquema y las migraciones.
+3. **`uv`** como gestor de paquetes y entorno, con Python `>=3.12` y `backend/uv.lock` versionado.
+4. **Sin autenticación en v0**: la API queda abierta en local y la decisión se retoma antes de exponerla.
+5. Testing del backend con **pytest + httpx**, la propuesta registrada en `docs/stack.md`.
+
+**Consecuencias.**
+
+- Un solo motor simplifica el arranque: sin servicio externo ni contenedor. Migrar a PostgreSQL es una decisión
+  aparte y queda listada como pendiente en `docs/stack.md`.
+- El modelo evita tipos no portables (`JSONB`, `ENUM`, `ARRAY`, UUID nativo) y guarda los ids como UUID v4 en
+  `String(36)`: el cambio a PostgreSQL no debería tocar dominio ni contrato.
+- La app y Alembic comparten la misma URL asíncrona; las migraciones corren con `asyncio` y `render_as_batch` para
+  que SQLite acepte los `ALTER`.
+- Sin auth no hay entidad `user`: el «perfil de usuario» del wireframe sigue decorativo y Q5 de
+  `docs/open-questions.md` queda resuelta.
+- Los tests migran una base temporal con Alembic en lugar de llamar a `create_all`: una migración rota rompe la
+  suite.
+
+**Alternativas descartadas.** PostgreSQL + SQLite en desarrollo (dos motores desde el día uno); SQL escrito a mano
+sin ORM (migraciones a cargo del equipo); token fijo desde el arranque (suma guard y configuración sin uso real).
+
+---
+
 ## Precedencia entre el documento y el wireframe
 
 Si el texto de `desing.md` y la imagen `grayscale_language_tutor_chat_ui.png` difieren: **manda el texto**.

@@ -1,6 +1,6 @@
 # Roadmap — Polybot
 
-Cada fase termina con algo verificable por un humano. Estado actual: **F0**.
+Cada fase termina con algo verificable por un humano. Estado actual: **F2**.
 
 ## F0 — Base documental
 
@@ -30,13 +30,21 @@ La separación inicio / conversación se verificó con una sonda de geometría e
 (`odd/tasks/chat-home-split.md`).
 El permiso de micrófono queda explícitamente para F4, cuando exista el micrófono.
 
-## F2 — Esqueleto del backend y contrato real
+## F2 — Esqueleto del backend y contrato real — **completada** (rama `feat/f2-backend-skeleton`)
 
-- FastAPI con `/health`, configuración tipada, sobre de error uniforme.
-- Implementación de `/languages` y `/conversations` con persistencia.
-- Iteración del contrato contra la UI, sin romper `docs/api-contract.md`.
+Alcance, decisiones y evidencia: `odd/tasks/f2-backend-skeleton.md`.
 
-**Verificación:** la PWA de F1 consume datos reales en esas dos secciones.
+- [x] FastAPI con `/health`, configuración tipada (`pydantic-settings`) y sobre de error uniforme para todo error, incluidos los 422 de validación.
+- [x] `/languages` con persistencia: listar, agregar, cambiar nivel/meta/activo (uno activo a la vez) y archivar de forma blanda.
+- [x] `/conversations` con persistencia: historial del idioma con cursor, crear, detalle con mensajes paginados, renombrar y eliminar.
+- [x] Esquema y migración inicial con SQLAlchemy 2 + Alembic sobre SQLite, más seed idempotente con los datos de ejemplo.
+- [x] Suite de tests del backend sobre una base migrada por Alembic.
+- [x] La PWA de F1 consume datos reales en esas dos secciones; con el backend caído muestra un estado de error, no un historial inventado.
+
+**Verificación:** `uv run pytest` (37 passed), `uv run ruff format --check` y `uv run ruff check` limpios, `npm run typecheck`
+y `npm run build` verdes, y una sonda con Chrome headless contra la API real que comprueba inicio, `/languages`,
+`/chat/:id`, el cambio de contexto al abrir una conversación de otro idioma, el 404 de una conversación inexistente
+y el estado de error con el backend caído. Detalle en `odd/tasks/f2-backend-skeleton.md` §Verificación.
 
 ## F3 — Chat de texto real
 
