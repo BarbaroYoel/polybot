@@ -2,7 +2,23 @@
 
 PWA de tutor de idiomas guiada por IA, centrada en el chat, con voz como capacidad de primera clase.
 
-**Estado:** F0 — diseño y documentación. Todavía no hay código.
+**Estado:** F1 — carcasa de la PWA con datos de ejemplo. Sin backend todavía.
+
+## Cómo correrlo
+
+```bash
+cd frontend
+npm install
+npm run dev      # http://localhost:5173
+```
+
+```bash
+npm run typecheck   # TypeScript estricto
+npm run build       # typecheck + bundle de producción
+```
+
+Los datos que se ven son de ejemplo y la interfaz lo dice: no hay API conectada.
+Los controles sin función están deshabilitados con un `title` que explica en qué fase llegan.
 
 ## Qué hay en este repositorio
 
@@ -21,12 +37,12 @@ PWA de tutor de idiomas guiada por IA, centrada en el chat, con voz como capacid
 
 ## Stack definido
 
-Backend **FastAPI** · TTS **Piper** · frontend PWA independiente del harness · UI en español, estética monocromática.
-Pendiente: framework del frontend, motor STT, base de datos. Ver `docs/stack.md`.
+Frontend **React 18 + Vite + TypeScript** (ADR-010) · backend **FastAPI** · TTS **Piper** · PWA independiente del harness · UI en español, estética monocromática.
+Pendiente: motor STT, base de datos, motor del tutor. Ver `docs/stack.md`.
 
 ## Cómo arrancar
 
-No hay build todavía. El siguiente paso está en `docs/roadmap.md` (F0 → F1).
+El frontend de F1 ya corre (ver arriba). Lo siguiente está en `docs/roadmap.md` (F2: esqueleto del backend).
 
 ## Skills del proyecto
 
