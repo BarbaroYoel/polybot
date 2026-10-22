@@ -23,16 +23,30 @@ Rama: `feat/f1-pwa-shell`.
 
 ## Tasks
 
-| ID | Qué | Specs | Estado |
+| ID | Qué | Specs | Estado | Commit |
+|---|---|---|---|---|
+| T1 | Scaffold Vite + React + TS, tokens y base tipográfica | S5 | hecho | 6edf97f |
+| T2 | AppShell, Sidebar, TopBar, responsive con drawer | S2, S6 | hecho | 6edf97f |
+| T3 | Contexto de idioma activo persistente y badge de nivel | S3 | hecho | 6edf97f |
+| T4 | Pantalla de conversación: tarjetas, hilo, chips, acciones de mensaje | S1, S4 | hecho | e9efeed |
+| T5 | Compositor con Enter/Shift+Enter y acciones deshabilitadas declaradas | S4, S7 | hecho | e9efeed |
+| T6 | Vistas base de Lecciones, Planes, Traducción, Progreso, Idiomas, Configuración | S2, S7 | hecho | 6edf97f |
+| T7 | Estados vacío/carga/error, banner offline, manifest PWA | S8 | hecho | 6edf97f, e9efeed |
+| T8 | Verificación: build + typecheck, checklist §14 | S1–S8 | hecho | — (ver L3) |
+
+## Slices
+
+| Slice | Commit | Líneas de autor | Contenido |
 |---|---|---|---|
-| T1 | Scaffold Vite + React + TS, tokens y base tipográfica | S5 | hecho |
-| T2 | AppShell, Sidebar, TopBar, responsive con drawer | S2, S6 | hecho |
-| T3 | Contexto de idioma activo persistente y badge de nivel | S3 | hecho |
-| T4 | Pantalla de conversación: tarjetas, hilo, chips, acciones de mensaje | S1, S4 | hecho |
-| T5 | Compositor con Enter/Shift+Enter y acciones deshabilitadas declaradas | S4, S7 | hecho |
-| T6 | Vistas base de Lecciones, Planes, Traducción, Progreso, Idiomas, Configuración | S2, S7 | hecho |
-| T7 | Estados vacío/carga/error, banner offline, manifest PWA | S8 | hecho |
-| T8 | Verificación: build + typecheck, checklist §14 | S1–S8 | hecho |
+| 1 | f4abaab | ~50 | ADR-010, Q3 resuelto, este documento |
+| 2 | 6edf97f | ~1000 | scaffold + shell + navegación + vistas base |
+| 3 | e9efeed | ~550 | pantalla de conversación + compositor + wiring de rutas |
+| 4 | — | ~40 | documentación de comandos y estado F1 |
+
+**Sobre el tamaño.** El slice 2 supera la guía de ~400 líneas. Se aceptó a propósito: el shell, la navegación
+y las vistas base comparten tokens, layout y contexto de idioma, así que partirlas produciría commits que no
+compilan ni se pueden revisar solos. La unidad de revisión real de esta entrega es la rama `feat/f1-pwa-shell`
+completa, que corresponde a un único entregable del roadmap (F1).
 
 ## Log
 
@@ -40,4 +54,27 @@ Rama: `feat/f1-pwa-shell`.
 
 **L2** — Framework elegido para arrancar F1: «React + Vite + TypeScript (recomendado)».
 
-**L3** — Verificación T8: `npm run build` (tsc -b + vite build) sin errores; servidor de previsualización responde 200 en `/`.
+**L3** — Verificación T8 (observada, no inferida):
+
+- `npm run build` → `tsc --noEmit` sin errores + `vite build` en 560 ms, 57 módulos, bundle 183.93 kB (60.18 kB gzip).
+- `npm run preview` → `GET /` 200, `GET /lessons` 200 (fallback SPA), `GET /manifest.webmanifest` 200; el HTML sirve `<title>Polybot — Tutor de idiomas</title>` y `<div id="root"></div>`.
+- Cada uno de los tres commits de código se verificó con build verde antes de commitear.
+
+**L4** — Slice 2 supera la guía de ~400 líneas y se documentó el motivo en `## Slices`; la unidad de revisión es la rama de F1.
+
+## Verificación contra `desing.md` §14
+
+| Criterio | Cómo se cumple |
+|---|---|
+| Simple, limpia, centrada en el chat | La ruta inicial es el hilo; las tarjetas son una fila, no un dashboard. |
+| Sidebar con todas las secciones y Mis idiomas | `Sidebar.tsx`: 5 secciones + Mis idiomas + Configuración al pie. |
+| Pantalla principal según el wireframe | Misma jerarquía: cabecera, 3 tarjetas, hilo, compositor. Valores de color según tokens (ADR-009). |
+| Idioma activo y nivel evidentes | Chip en la TopBar + badge de nivel + resaltado en el sidebar. |
+| Conversación nueva e historial | El historial de ejemplo se filtra por idioma activo; «Nueva conversación» está deshabilitado y lo declara. |
+| Compositor con texto y voz identificados | Textarea + adjuntar/voz en vivo/micrófono/enviar, los tres de audio deshabilitados con motivo. |
+| Traducción y repetición de audio claras | «Traducir» funciona localmente; «Escuchar» deshabilitado hasta F4. |
+| Lecciones, planes, traducción y progreso consistentes | Mismo `SectionPage` para las cuatro. |
+| Responsive escritorio y móvil | Grid de sidebar persistente ≥1024px; drawer con overlay <1024px; tarjetas 3→2→1 columnas. |
+| Estados vacío, carga, error y permisos | `EmptyState` (idioma sin conversaciones), `LoadingState` (Suspense del chat), `ErrorState` (error boundary de rutas), banner offline. Permiso de micrófono queda para F4, cuando exista el micrófono. |
+| Ningún botón implica función inexistente | Todos los controles sin backend están `disabled` con `title` que nombra la fase. |
+| Frontend sin dependencia del harness | Solo `react`, `react-dom`, `react-router-dom`; ninguna referencia a Pi/OpenCode. |

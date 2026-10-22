@@ -2,28 +2,30 @@
 
 Cada fase termina con algo verificable por un humano. Estado actual: **F0**.
 
-## F0 — Base documental (actual)
+## F0 — Base documental
 
 - [x] `desing.md` con producto, pantallas, estados y criterios de aceptación.
 - [x] Contrato de trabajo para agentes (`AGENTS.md`).
 - [x] Arquitectura, stack, contrato de API, convenciones y decisiones.
-- [ ] Repositorio Git inicializado y primer commit.
+- [x] Repositorio Git inicializado y primer commit (`4c27b58`).
 - [ ] Repositorio remoto y política de ramas.
 
 **Salida:** cualquier agente puede leer el repo y saber qué construir sin inventar decisiones.
 
-## F1 — Carcasa de la PWA con datos de ejemplo
+## F1 — Carcasa de la PWA con datos de ejemplo — **completada** (rama `feat/f1-pwa-shell`)
 
-Alcance: `desing.md` §13, puntos 1–5.
+Alcance: `desing.md` §13, puntos 1–5. Detalle y evidencia: `odd/tasks/f1-pwa-shell.md`.
 
-- Shell con sidebar, cabecera y navegación (todas las secciones).
-- Pantalla de conversación completa: mensajes, sugerencias rápidas, compositor.
-- Selector de idioma con contexto persistente entre recargas.
-- Vistas base de Lecciones, Planes, Traducción y Progreso con datos de ejemplo **identificados como tales**.
-- Estados vacíos, de carga, de error y de permiso.
-- Responsive escritorio / tablet / móvil.
+- [x] Shell con sidebar, cabecera y navegación (todas las secciones).
+- [x] Pantalla de conversación completa: mensajes, sugerencias rápidas, compositor.
+- [x] Selector de idioma con contexto persistente entre recargas.
+- [x] Vistas base de Lecciones, Planes, Traducción y Progreso con datos de ejemplo identificados.
+- [x] Estados vacíos, de carga, de error y de permiso; banner sin conexión.
+- [x] Responsive escritorio / tablet / móvil.
+- [x] Build y typecheck verdes; verificación de checklist §14 registrada en el documento de la feature.
 
-**Verificación:** checklist de `desing.md` §14 completa; sin botones que finjan función inexistente.
+**Verificación:** checklist de `desing.md` §14 completa (tabla en `odd/tasks/f1-pwa-shell.md` §Verificación).
+El permiso de micrófono queda explícitamente para F4, cuando exista el micrófono.
 
 ## F2 — Esqueleto del backend y contrato real
 

@@ -54,11 +54,20 @@ Detalle completo en `docs/architecture.md`.
 
 ## 5. Comandos
 
-Hoy **no existe código**: este repositorio solo contiene diseño y documentación.
-No inventes comandos de build, test ni migración, y no ejecutes instaladores por iniciativa propia.
+Hoy existe `frontend/` (F1). Estos son los únicos comandos válidos:
 
-Cuando exista el esqueleto, esta sección es la única fuente de comandos del proyecto y se actualiza en el mismo
-commit que los agrega.
+| Qué | Comando | Dónde |
+|---|---|---|
+| Instalar dependencias | `npm install` | `frontend/` |
+| Servidor de desarrollo | `npm run dev` | `frontend/` → http://localhost:5173 |
+| Typecheck | `npm run typecheck` | `frontend/` |
+| Build de producción | `npm run build` | `frontend/` |
+| Previsualizar el build | `npm run preview` | `frontend/` |
+
+El backend todavía no existe: no hay comandos de Python, tests ni migraciones.
+Cuando se cree `backend/`, se agregan acá en el mismo commit que los introduce.
+
+No inventes comandos de build, test ni migración, y no ejecutes instaladores por iniciativa propia.
 
 ## 6. Cómo trabajar
 
