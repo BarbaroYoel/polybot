@@ -36,13 +36,14 @@ def _request_id(request: Request) -> str:
     return getattr(request.state, "request_id", "")
 
 
-def _json(
+def error_response(
     request: Request,
     status_code: int,
     code: str,
     message: str,
     details: dict[str, Any] | None = None,
 ) -> JSONResponse:
+    """Build the contract error response. Every error in the API goes through this."""
     return JSONResponse(
         status_code=status_code,
         content=error_body(code, message, details=details, request_id=_request_id(request)),
@@ -60,13 +61,13 @@ def _describe_http_error(status_code: int) -> tuple[str, str]:
 def install_error_handlers(app: FastAPI) -> None:
     @app.exception_handler(ApiError)
     async def handle_api_error(request: Request, exc: ApiError) -> JSONResponse:
-        return _json(request, exc.status_code, exc.code, exc.message, exc.details)
+        return error_response(request, exc.status_code, exc.code, exc.message, exc.details)
 
     @app.exception_handler(StarletteHTTPException)
     async def handle_http_exception(request: Request, exc: StarletteHTTPException) -> JSONResponse:
         # Our own Spanish message, never Starlette's English default: the client shows this text.
         code, message = _describe_http_error(exc.status_code)
-        return _json(request, exc.status_code, code, message)
+        return error_response(request, exc.status_code, code, message)
 
     @app.exception_handler(RequestValidationError)
     async def handle_validation_error(
@@ -79,10 +80,12 @@ def install_error_handlers(app: FastAPI) -> None:
             }
             for error in exc.errors()
         ]
-        return _json(request, 422, "validation_error", _VALIDATION_MESSAGE, {"fields": fields})
+        return error_response(
+            request, 422, "validation_error", _VALIDATION_MESSAGE, {"fields": fields}
+        )
 
     @app.exception_handler(Exception)
     async def handle_unexpected_error(request: Request, exc: Exception) -> JSONResponse:
         logger.exception("Unhandled error [request_id=%s]", _request_id(request), exc_info=exc)
         code, message = _HTTP_ERRORS[500]
-        return _json(request, 500, code, message)
+        return error_response(request, 500, code, message)

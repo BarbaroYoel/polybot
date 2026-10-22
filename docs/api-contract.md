@@ -9,6 +9,7 @@ Prefijo: `/api/v1`. Formato: JSON UTF-8. Fechas: ISO 8601 UTC (`2026-10-22T14:03
 - Identificadores: UUID v4 como string.
 - Paginación por cursor: `?limit=20&cursor=<opaco>`; respuesta `{ "items": [...], "next_cursor": "..." | null }`.
 - Errores: siempre el sobre del punto 4, nunca HTML ni texto plano.
+- Códigos de error estables (el `code` no se traduce; el `message`, sí): `language_not_found`, `conversation_not_found`, `language_already_exists`, `active_language_cannot_be_archived`, `last_language_cannot_be_archived`, `invalid_cursor`, `validation_error`, `not_found`, `method_not_allowed`, `internal_error`. Un código nuevo se agrega acá en el mismo commit que lo introduce.
 - Operaciones de escritura aceptan `Idempotency-Key` (header) cuando el reintento duplicaría un turno.
 - Zona horaria: el cliente envía `tz` cuando el cálculo lo requiera (metas semanales); el servidor guarda UTC.
 
@@ -43,21 +44,21 @@ Prefijo: `/api/v1`. Formato: JSON UTF-8. Fechas: ISO 8601 UTC (`2026-10-22T14:03
 ### Idiomas
 | Método | Ruta | Qué hace |
 |---|---|---|
-| GET | `/languages` | Lista idiomas no archivados. |
-| POST | `/languages` | Agrega un idioma (`code`, `level`, `explanation_language`). |
-| PATCH | `/languages/{id}` | Cambia nivel, meta o `is_active`. Activar uno desactiva el anterior. |
-| DELETE | `/languages/{id}` | Archiva (blando). Requiere confirmación en la UI. |
+| GET | `/languages` | Lista los idiomas no archivados, del más viejo al más nuevo. Responde un **array** JSON, sin paginar: son pocos y la UI los necesita completos. |
+| POST | `/languages` | Agrega un idioma (`code`, `name`, `level`, `explanation_language`, `weekly_goal`). Responde 201; el idioma nuevo queda **inactivo**. El `code` se guarda en minúsculas y es único: uno repetido es 409 `language_already_exists`. |
+| PATCH | `/languages/{id}` | Cambia `level`, `weekly_goal` o `is_active`. Activar uno desactiva el anterior. |
+| DELETE | `/languages/{id}` | Archiva (blando) y responde 204. Archivar el idioma activo es 409 `active_language_cannot_be_archived`: la UI debe activar otro primero. |
 
 ### Conversaciones y mensajes
 | Método | Ruta | Qué hace |
 |---|---|---|
-| GET | `/conversations?language_id=&cursor=` | Historial del idioma, más recientes primero. |
-| POST | `/conversations` | Crea conversación (`language_id`, `mode`, `title?`). |
-| GET | `/conversations/{id}` | Conversación con sus mensajes paginados. |
+| GET | `/conversations?language_id=&limit=&cursor=` | Historial del idioma, por última actividad (último mensaje o, si no hay, la creación). `language_id` es obligatorio; un idioma inexistente es 404 `language_not_found`. |
+| POST | `/conversations` | Crea conversación (`language_id`, `mode`, `title?`) y responde 201. Sin `title`, el servidor pone `Nueva conversación`. |
+| GET | `/conversations/{id}?language_id=&messages_limit=&messages_cursor=` | Conversación con `messages: { items, next_cursor }`. `language_id` es opcional y sirve de guarda: si la conversación pertenece a otro idioma, responde 404 `conversation_not_found`. |
 | PATCH | `/conversations/{id}` | Renombra (`title`). |
-| DELETE | `/conversations/{id}` | Elimina con confirmación previa en la UI. |
-| POST | `/conversations/{id}/messages` | Envía mensaje del usuario; devuelve el mensaje persistido. |
-| GET | `/conversations/{id}/stream?message_id=` | SSE: `token`, `message_end`, `correction`, `error`. |
+| DELETE | `/conversations/{id}` | Elimina con confirmación previa en la UI; borra sus mensajes. Responde 204. |
+| POST | `/conversations/{id}/messages` | Envía mensaje del usuario; devuelve el mensaje persistido. **F3.** |
+| GET | `/conversations/{id}/stream?message_id=` | SSE: `token`, `message_end`, `correction`, `error`. **F3.** |
 
 ### Voz
 | Método | Ruta | Qué hace |
@@ -106,5 +107,6 @@ El `code` es estable y no se traduce; el `message` sí.
 | Audio por request de transcripción | 120 s |
 | Audio por request de síntesis | 2000 caracteres |
 | Mensajes por página | 50 |
+| Conversaciones por página | 20 (`limit` acepta 1–50) |
 | Timeout por proveedor | 30 s (LLM 60 s) |
 | Tokens de contexto por turno | A definir con el prompt del tutor |

@@ -67,9 +67,9 @@ suma los comandos del backend; `docs/open-questions.md` marca Q5 resuelta.
 
 | ID | Qué | Specs | Estado | Commit |
 |---|---|---|---|---|
-| T1 | Esqueleto: proyecto `uv`, `pyproject.toml`, `ruff`, `pytest`, config tipada, app factory, `request_id`, sobre de error, `/health` | S1, S3, S4, S5 | pendiente | — |
-| T2 | Persistencia: entidades de dominio, `ports/`, modelos y repositorios SQLAlchemy, migración Alembic inicial, seed con los datos de ejemplo | S1, S6, S7 | pendiente | — |
-| T3 | API v1: `/languages` y `/conversations` completos, casos de uso en `application/`, tests de integración | S4, S6, S7, S8 | pendiente | — |
+| T1 | Esqueleto: proyecto `uv`, `pyproject.toml`, `ruff`, `pytest`, config tipada, app factory, `request_id`, sobre de error, `/health` | S1, S3, S4, S5 | hecho | `a7adab6` |
+| T2 | Persistencia: entidades de dominio, `ports/`, modelos y repositorios SQLAlchemy, migración Alembic inicial, seed con los datos de ejemplo | S1, S6, S7 | hecho | `fc7a812` |
+| T3 | API v1: `/languages` y `/conversations` completos, casos de uso en `application/`, tests de integración | S4, S6, S7, S8 | hecho | siguiente unidad |
 | T4 | Frontend contra la API: cliente HTTP, tipos del contrato, inicio, conversación y `/languages` con datos reales | S9 | pendiente | — |
 | T5 | Docs y verificación de la fase: ADR-012, `stack.md`, `roadmap.md`, `api-contract.md`, `AGENTS.md` §5, Q5; suite backend y typecheck/build del frontend | S1, S10 | pendiente | — |
 
@@ -96,3 +96,24 @@ encima de esa rama; integrarla a `main` sigue siendo decisión del humano y no b
 
 **L4** — Entorno disponible: `uv 0.11.23`, Python 3.14.4, Node 24.19.0. `docs/stack.md` pide confirmar Python
 «3.12 o superior»: se fija `requires-python = ">=3.12"` y el intérprete instalado se usa tal cual.
+
+**L5** — U1 y U3 con RED observado antes del código: los tests del esqueleto fallaron primero con
+`ModuleNotFoundError: No module named 'app'`. Para U3, escrito después del código, el verde se validó con dos
+mutaciones: quitar la comparación de idioma en `get_conversation_detail` y quitar la desactivación de los otros
+idiomas en `PATCH`; cada mutación rompió exactamente su test y revertirla devolvió 37 en verde.
+
+**L6** — El seed falló con `FOREIGN KEY constraint failed`: sin `relationship()`, SQLAlchemy no ordena los
+INSERT entre tablas por sí solo. Se resuelve con `flush()` explícito en orden de dependencia (idiomas →
+conversaciones → mensajes), no agregando relaciones al mapeo.
+
+**L7** — Cada unidad de trabajo se commitea con su código y sus tests, y su hash se anota en la tabla y el Log en
+la unidad siguiente; el cierre (T5) deja la tabla completa con todos los hashes.
+
+**L8** — Decisiones concretas que el contrato no fijaba y que se registran en `docs/api-contract.md` en el mismo
+commit que las introduce: `GET /languages` responde un array sin paginar; archivar el idioma activo es 409 (no se
+cambia el contexto del usuario en silencio); `GET /conversations/{id}` acepta `language_id` como guarda y
+devuelve `messages: { items, next_cursor }`; sin `title` la conversación se crea como «Nueva conversación».
+También se agrega la lista cerrada de códigos de error estables.
+
+**L9** — Al escribir los tests de conteo de la base apareció una dependencia implícita: `sqlalchemy` necesita el
+extra `asyncio` (greenlet) y SQLite asíncrono necesita `aiosqlite`. Ambas quedan declaradas en `pyproject.toml`.

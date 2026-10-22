@@ -10,6 +10,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.adapters.db.session import create_engine, create_session_factory
+from app.api.v1.errors import install_domain_error_handler
 from app.api.v1.router import api_router
 from app.core.config import Settings
 from app.core.handlers import install_error_handlers
@@ -49,6 +50,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     )
 
     install_error_handlers(app)
+    install_domain_error_handler(app)
     app.include_router(api_router, prefix=API_PREFIX)
     return app
 

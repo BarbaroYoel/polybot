@@ -23,3 +23,7 @@ class LanguageAlreadyExists(DomainError):
 
 class LastLanguageCannotBeArchived(DomainError):
     """Archiving the only remaining language would leave the app without a context."""
+
+
+class ActiveLanguageCannotBeArchived(DomainError):
+    """The active language is the user's current context; archiving it needs an explicit switch."""
