@@ -6,8 +6,16 @@ This module is the only place that wires concrete adapters into the application 
 
 from collections.abc import AsyncIterator
 
-from fastapi import Request
+from fastapi import Depends, Request
 from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.adapters.db.conversations import (
+    SqlAlchemyConversationRepository,
+    SqlAlchemyMessageRepository,
+)
+from app.adapters.db.languages import SqlAlchemyLanguageRepository
+from app.application.conversations import ConversationService
+from app.application.languages import LanguageService
 
 
 async def get_session(request: Request) -> AsyncIterator[AsyncSession]:
@@ -20,3 +28,19 @@ async def get_session(request: Request) -> AsyncIterator[AsyncSession]:
         except Exception:
             await session.rollback()
             raise
+
+
+async def get_language_service(
+    session: AsyncSession = Depends(get_session),
+) -> LanguageService:
+    return LanguageService(SqlAlchemyLanguageRepository(session))
+
+
+async def get_conversation_service(
+    session: AsyncSession = Depends(get_session),
+) -> ConversationService:
+    return ConversationService(
+        conversations=SqlAlchemyConversationRepository(session),
+        messages=SqlAlchemyMessageRepository(session),
+        languages=SqlAlchemyLanguageRepository(session),
+    )

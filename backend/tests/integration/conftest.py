@@ -10,7 +10,9 @@ from alembic.config import Config
 from fastapi.testclient import TestClient
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
+from app.adapters.db.seed import seed_example_data
 from app.adapters.db.session import create_engine, create_session_factory
+from app.core.config import Settings
 from app.main import create_app
 
 BACKEND_ROOT = Path(__file__).resolve().parents[2]
@@ -39,3 +41,19 @@ def session_factory(database_url: str) -> Iterator[async_sessionmaker[AsyncSessi
     engine = create_engine(database_url)
     yield create_session_factory(engine)
     asyncio.run(engine.dispose())
+
+
+@pytest.fixture
+def api_client(
+    database_url: str, session_factory: async_sessionmaker[AsyncSession]
+) -> Iterator[TestClient]:
+    """A client whose app talks to the seeded temporary database."""
+
+    async def seed() -> None:
+        async with session_factory() as session:
+            await seed_example_data(session)
+            await session.commit()
+
+    asyncio.run(seed())
+    with TestClient(create_app(Settings(database_url=database_url))) as test_client:
+        yield test_client
