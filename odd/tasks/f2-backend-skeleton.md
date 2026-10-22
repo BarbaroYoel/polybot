@@ -69,9 +69,9 @@ suma los comandos del backend; `docs/open-questions.md` marca Q5 resuelta.
 |---|---|---|---|---|
 | T1 | Esqueleto: proyecto `uv`, `pyproject.toml`, `ruff`, `pytest`, config tipada, app factory, `request_id`, sobre de error, `/health` | S1, S3, S4, S5 | hecho | `a7adab6` |
 | T2 | Persistencia: entidades de dominio, `ports/`, modelos y repositorios SQLAlchemy, migración Alembic inicial, seed con los datos de ejemplo | S1, S6, S7 | hecho | `fc7a812` |
-| T3 | API v1: `/languages` y `/conversations` completos, casos de uso en `application/`, tests de integración | S4, S6, S7, S8 | hecho | siguiente unidad |
-| T4 | Frontend contra la API: cliente HTTP, tipos del contrato, inicio, conversación y `/languages` con datos reales | S9 | hecho | siguiente unidad |
-| T5 | Docs y verificación de la fase: ADR-012, `stack.md`, `roadmap.md`, `api-contract.md`, `AGENTS.md` §5, Q5; suite backend y typecheck/build del frontend | S1, S10 | hecho | cierre |
+| T3 | API v1: `/languages` y `/conversations` completos, casos de uso en `application/`, tests de integración | S4, S6, S7, S8 | hecho | `a90d287` |
+| T4 | Frontend contra la API: cliente HTTP, tipos del contrato, inicio, conversación y `/languages` con datos reales | S9 | hecho | `8e77367` |
+| T5 | Docs y verificación de la fase: ADR-012, `stack.md`, `roadmap.md`, `api-contract.md`, `AGENTS.md` §5, Q5; suite backend y typecheck/build del frontend | S1, S10 | hecho | `d9add0e` |
 
 ## Log
 
