@@ -1,5 +1,3 @@
-import { Icon } from "../../components/Icon";
-import { useActiveLanguage } from "../../lib/language";
 import { SectionPage } from "./SectionPage";
 
 export function LessonsPage() {
@@ -79,55 +77,6 @@ export function SettingsPage() {
         "Generales: idioma de la interfaz, notificaciones y tema (más adelante).",
       ]}
     />
-  );
-}
-
-export function LanguagesPage() {
-  const { languages, active, setActiveCode } = useActiveLanguage();
-
-  return (
-    <SectionPage
-      title="Mis idiomas"
-      description="Cada idioma tiene su propio nivel, historial, lecciones y progreso. Solo uno está activo a la vez."
-      phase="Vista base · F1"
-      items={[
-        "Añadir o archivar idiomas.",
-        "Configurar idioma de aprendizaje, idioma de explicación y nivel inicial.",
-        "Cambiar de nivel con una acción explícita de configuración o evaluación.",
-      ]}
-    >
-      <ul>
-        {languages.map((language) => {
-          const isActive = language.code === active.code;
-          return (
-            <li key={language.code} className="page__row">
-              <Icon name="globe" size={18} />
-              <div className="page__row-main">
-                <p className="page__row-title">{language.name}</p>
-                <p className="page__row-meta">
-                  Nivel {language.level} · {language.conversationCount} conversaciones
-                </p>
-              </div>
-              {isActive ? (
-                <span className="page__phase">Activo</span>
-              ) : (
-                <button type="button" className="chips__item" onClick={() => setActiveCode(language.code)}>
-                  Activar
-                </button>
-              )}
-              <button
-                type="button"
-                className="chips__item"
-                disabled
-                title="Cambiar el nivel requiere backend y evaluación (F2); ver ADR-008"
-              >
-                Cambiar nivel
-              </button>
-            </li>
-          );
-        })}
-      </ul>
-    </SectionPage>
   );
 }
 

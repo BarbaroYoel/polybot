@@ -1,6 +1,9 @@
+import { useState } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { Icon } from "./Icon";
 import type { IconName } from "./Icon";
+import { Notice } from "./Notice";
+import { errorMessage } from "../lib/api/client";
 import { useActiveLanguage } from "../lib/language";
 import "./Sidebar.css";
 
@@ -33,8 +36,24 @@ interface SidebarProps {
 }
 
 export function Sidebar({ open, onClose }: SidebarProps) {
-  const { languages, active, setActiveCode } = useActiveLanguage();
+  const { languages, active, status, error, setActiveCode } = useActiveLanguage();
   const { pathname } = useLocation();
+  const [pendingCode, setPendingCode] = useState<string | null>(null);
+  const [activationError, setActivationError] = useState<string | null>(null);
+
+  const activate = async (code: string) => {
+    // One activation at a time: the second response could otherwise overwrite the first.
+    if (pendingCode) return;
+    setPendingCode(code);
+    setActivationError(null);
+    try {
+      await setActiveCode(code);
+    } catch (error: unknown) {
+      setActivationError(errorMessage(error));
+    } finally {
+      setPendingCode(null);
+    }
+  };
 
   return (
     <nav className={`sidebar${open ? " sidebar--open" : ""}`} aria-label="Navegación principal">
@@ -69,39 +88,48 @@ export function Sidebar({ open, onClose }: SidebarProps) {
       <div className="sidebar__section">
         <div className="sidebar__section-head">
           <span>Mis idiomas</span>
-          <button
-            type="button"
-            className="sidebar__add"
-            disabled
-            title="Añadir idiomas llega con el backend (F2)"
-          >
+          <Link className="sidebar__add" to="/languages" title="Agregar idioma" aria-label="Agregar idioma">
             <Icon name="plus" size={18} />
-            <span className="visually-hidden">Añadir idioma</span>
-          </button>
+          </Link>
         </div>
 
-        <ul className="sidebar__languages">
-          {languages.map((language) => {
-            const isActive = language.code === active.code;
-            return (
-              <li key={language.code}>
-                <button
-                  type="button"
-                  className={`sidebar__language${isActive ? " sidebar__language--active" : ""}`}
-                  aria-pressed={isActive}
-                  onClick={() => setActiveCode(language.code)}
-                >
-                  <Icon name="globe" size={18} />
-                  <span className="sidebar__language-name">{language.name}</span>
-                  {/* Nivel como dato de solo lectura (ADR-008): no es un selector. */}
-                  <span className="sidebar__level" title={`Nivel actual: ${language.level}`}>
-                    {language.level}
-                  </span>
-                </button>
-              </li>
-            );
-          })}
-        </ul>
+        {languages.length > 0 && (
+          <ul className="sidebar__languages">
+            {languages.map((language) => {
+              // The active language comes from the server (`is_active`), not from a local choice.
+              const isActive = language.id === active?.id;
+              return (
+                <li key={language.id}>
+                  <button
+                    type="button"
+                    className={`sidebar__language${isActive ? " sidebar__language--active" : ""}`}
+                    aria-pressed={isActive}
+                    aria-busy={pendingCode === language.code}
+                    onClick={() => void activate(language.code)}
+                  >
+                    <Icon name="globe" size={18} />
+                    <span className="sidebar__language-name">{language.name}</span>
+                    {/* Nivel como dato de solo lectura (ADR-008): no es un selector. */}
+                    <span className="sidebar__level" title={`Nivel actual: ${language.level}`}>
+                      {language.level}
+                    </span>
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
+        )}
+
+        {languages.length === 0 && status !== "error" && (
+          <Notice live={status === "loading"}>
+            {status === "loading"
+              ? "Cargando tus idiomas…"
+              : "Todavía no hay idiomas en tu lista. Agrega uno desde Mis idiomas."}
+          </Notice>
+        )}
+
+        {status === "error" && error && <Notice live>{errorMessage(error)}</Notice>}
+        {activationError && <Notice live>{activationError}</Notice>}
       </div>
 
       <div className="sidebar__footer">

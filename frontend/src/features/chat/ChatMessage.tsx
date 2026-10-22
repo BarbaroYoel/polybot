@@ -23,7 +23,7 @@ export function ChatMessage({ message }: ChatMessageProps) {
           <p className="message__text">{message.content}</p>
           {showTranslation && (
             <p className="message__translation">
-              {message.translation ?? "Traducción no disponible en los datos de ejemplo."}
+              {message.translation ?? "Traducción no disponible para este mensaje."}
             </p>
           )}
         </div>
