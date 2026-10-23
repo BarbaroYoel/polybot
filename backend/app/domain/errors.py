@@ -27,3 +27,11 @@ class LastLanguageCannotBeArchived(DomainError):
 
 class ActiveLanguageCannotBeArchived(DomainError):
     """The active language is the user's current context; archiving it needs an explicit switch."""
+
+
+class LlmUnavailable(DomainError):
+    """The tutor provider failed, exited early or returned an unusable answer (F3)."""
+
+
+class LlmTimeout(DomainError):
+    """The tutor did not answer within the configured time (F3)."""

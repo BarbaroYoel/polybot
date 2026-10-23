@@ -1,0 +1,7 @@
+Historial de la conversación (más viejo primero):
+$history
+
+Nuevo mensaje del estudiante:
+$user_message
+
+Respondé como el tutor.

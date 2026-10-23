@@ -29,11 +29,28 @@ class Settings(BaseSettings):
     cors_origins: str = "http://localhost:5173"
     database_url: str = DEFAULT_DATABASE_URL
 
+    # Tutor: a Pi instance per turn (F3, ADR-013). `pi_model` empty means the installed default.
+    pi_bin_path: str = "pi"
+    pi_model: str = ""
+    pi_timeout_seconds: float = 60.0
+
     @field_validator("database_url")
     @classmethod
     def _empty_database_url_means_the_default(cls, value: str) -> str:
         # docs/env.example ships an empty DATABASE_URL: an empty value must not break the app.
         return value.strip() or DEFAULT_DATABASE_URL
+
+    @field_validator("pi_bin_path")
+    @classmethod
+    def _empty_bin_path_means_the_path_lookup(cls, value: str) -> str:
+        return value.strip() or "pi"
+
+    @field_validator("pi_timeout_seconds")
+    @classmethod
+    def _timeout_must_be_positive(cls, value: float) -> float:
+        if value <= 0:
+            raise ValueError("PI_TIMEOUT_SECONDS must be greater than zero")
+        return value
 
     @field_validator("cors_origins")
     @classmethod
@@ -43,3 +60,7 @@ class Settings(BaseSettings):
     @cached_property
     def cors_origin_list(self) -> list[str]:
         return [origin.strip() for origin in self.cors_origins.split(",") if origin.strip()]
+
+    @cached_property
+    def pi_model_or_none(self) -> str | None:
+        return self.pi_model.strip() or None
