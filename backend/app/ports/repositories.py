@@ -1,5 +1,6 @@
 """Repository ports. `application/` depends on these, never on the SQLAlchemy adapters."""
 
+from collections.abc import Sequence
 from datetime import datetime
 from typing import Protocol
 
@@ -14,6 +15,8 @@ from app.domain.entities import (
     NewMessage,
     WeeklyGoal,
 )
+from app.domain.feedback import MessageFeedback
+from app.ports.llm import TurnFeedback
 
 
 class LanguageRepository(Protocol):
@@ -88,3 +91,15 @@ class MessageRepository(Protocol):
 
     async def find_message_by_key(self, conversation_id: str, key: str) -> Message | None:
         """The turn already stored for that retry key, if any (idempotent sends)."""
+
+    async def save_feedback(
+        self, message_id: str, language_id: str, feedback: TurnFeedback
+    ) -> MessageFeedback:
+        """Store the closing turn of one user message; a retried turn replaces it (F3 S7).
+
+        `language_id` is the conversation's language and is stored with every vocabulary item, so
+        the terms are readable per language later (S8).
+        """
+
+    async def feedback_for_messages(self, message_ids: Sequence[str]) -> dict[str, MessageFeedback]:
+        """Feedback of the given messages, keyed by message id, in one query (no N+1)."""

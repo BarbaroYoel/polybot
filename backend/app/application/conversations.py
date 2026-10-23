@@ -16,6 +16,7 @@ from app.domain.entities import (
     NewMessage,
 )
 from app.domain.errors import ConversationNotFound, LanguageNotFound
+from app.domain.feedback import MessageFeedback
 from app.ports.repositories import ConversationRepository, LanguageRepository, MessageRepository
 
 # Without an LLM yet, a conversation needs a title the user can rename (desing.md §6.1.1).
@@ -60,7 +61,8 @@ class ConversationService:
         language_id: str | None = None,
         messages_limit: int,
         messages_after: tuple[datetime, str] | None = None,
-    ) -> tuple[Conversation, Page[Message]]:
+    ) -> tuple[Conversation, Page[Message], dict[str, MessageFeedback]]:
+        """The conversation, one page of messages and the feedback of that page (F3 S7)."""
         conversation = await self._conversations.get_conversation(conversation_id)
         # A conversation is only reachable from its own language (S8).
         if conversation is None or (
@@ -71,7 +73,15 @@ class ConversationService:
         rows = await self._messages.list_messages(
             conversation_id, limit=messages_limit + 1, after=messages_after
         )
-        return conversation, self._page(rows, limit=messages_limit, key=lambda row: row.created_at)
+        page = self._page(rows, limit=messages_limit, key=lambda row: row.created_at)
+        return conversation, page, await self._feedback_of(page)
+
+    async def _feedback_of(self, page: Page[Message]) -> dict[str, MessageFeedback]:
+        """Feedback of the user messages of one page: one query, and only for those (S7)."""
+        user_ids = [message.id for message in page.items if message.author is MessageAuthor.USER]
+        if not user_ids:
+            return {}
+        return await self._messages.feedback_for_messages(user_ids)
 
     async def create_conversation(
         self,

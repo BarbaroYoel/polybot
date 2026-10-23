@@ -38,10 +38,56 @@ class TutorTurn:
     user_message: str
 
 
+@dataclass(frozen=True, slots=True)
+class CorrectionDraft:
+    """One correction of the user message, as the provider proposed it (F3 S7).
+
+    A draft, not a stored row: the adapter validates it (non-empty, trimmed, within the limits)
+    before `application/` persists it.
+    """
+
+    original: str
+    corrected: str
+    explanation: str
+
+
+@dataclass(frozen=True, slots=True)
+class VocabularyDraft:
+    """One suggested term of the practised language, with its translation in the explanation one."""
+
+    term: str
+    translation: str
+    note: str | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class TurnFeedback:
+    """What the closing call of a turn produced (F3 S7)."""
+
+    corrections: Sequence[CorrectionDraft] = ()
+    vocabulary: Sequence[VocabularyDraft] = ()
+
+    @property
+    def is_empty(self) -> bool:
+        """A turn with nothing to report: no rows to store and no events to emit."""
+        return not (self.corrections or self.vocabulary)
+
+
+EMPTY_FEEDBACK = TurnFeedback()
+
+
 class LlmPort(Protocol):
     def stream_reply(self, turn: TutorTurn) -> AsyncIterator[str]:
         """Yield the tutor reply as text deltas, in order.
 
         Closing the iterator early asks the adapter to cancel the provider call and release every
         resource it holds (docs/architecture.md §5: cancellation).
+        """
+
+    async def summarize_turn(self, turn: TutorTurn, reply: str) -> TurnFeedback:
+        """Close a turn that was already answered: corrections and suggested vocabulary (S7).
+
+        A separate invocation of the same provider, so the text the user already read is not
+        delayed by the closing step. An unusable answer is an `LlmUnavailable`: the caller keeps
+        the reply and skips the feedback (the chat is never broken by this step).
         """

@@ -16,11 +16,19 @@ from app.api.v1.schemas import (
     ConversationPage,
     ConversationUpdate,
     MessageCreate,
+    MessageFeedbackOut,
     MessageOut,
     MessagePage,
 )
 from app.application.conversations import ConversationService
-from app.application.tutor import TurnCompleted, TurnError, TurnState, TurnToken, TutorService
+from app.application.tutor import (
+    TurnCompleted,
+    TurnError,
+    TurnFeedbackReady,
+    TurnState,
+    TurnToken,
+    TutorService,
+)
 from app.core.dependencies import get_conversation_service, get_tutor_service
 from app.core.errors import error_body
 
@@ -65,7 +73,7 @@ async def get_conversation(
     messages_cursor: str | None = Query(default=None),
     service: ConversationService = Depends(get_conversation_service),
 ) -> ConversationDetailOut:
-    conversation, messages = await service.get_conversation_detail(
+    conversation, messages, feedback = await service.get_conversation_detail(
         conversation_id,
         language_id=language_id,
         messages_limit=messages_limit,
@@ -73,7 +81,7 @@ async def get_conversation(
     )
     return ConversationDetailOut(
         **ConversationOut.from_entity(conversation).model_dump(),
-        messages=MessagePage.from_page(messages),
+        messages=MessagePage.from_page(messages, feedback=feedback),
     )
 
 
@@ -157,6 +165,37 @@ async def _turn_events(
         elif isinstance(event, TurnError):
             _, code, message = describe_domain_error(event.error)
             yield _sse("error", error_body(code, message, request_id=request_id))
+        elif isinstance(event, TurnFeedbackReady):
+            # After `message_end`, and only now: the rows are committed before these leave (S7).
+            for chunk in _feedback_events(event):
+                yield chunk
+
+
+def _feedback_events(event: TurnFeedbackReady) -> list[str]:
+    """`correction` and then `vocabulary`, with the id of the user message that opened the turn."""
+    feedback = MessageFeedbackOut.from_turn_feedback(event.feedback)
+    events: list[str] = []
+    if feedback.corrections:
+        events.append(
+            _sse(
+                "correction",
+                {
+                    "message_id": event.message_id,
+                    "items": [item.model_dump(mode="json") for item in feedback.corrections],
+                },
+            )
+        )
+    if feedback.vocabulary:
+        events.append(
+            _sse(
+                "vocabulary",
+                {
+                    "message_id": event.message_id,
+                    "items": [item.model_dump(mode="json") for item in feedback.vocabulary],
+                },
+            )
+        )
+    return events
 
 
 def _sse(name: str, payload: dict[str, Any]) -> str:

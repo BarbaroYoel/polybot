@@ -1,12 +1,19 @@
 """Conversation and message persistence."""
 
+from collections.abc import Sequence
 from datetime import datetime
 from uuid import uuid4
 
 from sqlalchemy import and_, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.adapters.db.models import ConversationRow, MessageRow
+from app.adapters.db.models import (
+    ConversationRow,
+    MessageCorrectionRow,
+    MessageFeedbackRow,
+    MessageRow,
+    VocabularyItemRow,
+)
 from app.core.dates import utc_now
 from app.domain.entities import (
     Conversation,
@@ -17,6 +24,8 @@ from app.domain.entities import (
     NewConversation,
     NewMessage,
 )
+from app.domain.feedback import Correction, MessageFeedback, VocabularyItem
+from app.ports.llm import TurnFeedback
 
 # What the history is ordered by: the last message, or the creation when the conversation is empty.
 _ACTIVITY = func.coalesce(ConversationRow.last_message_at, ConversationRow.created_at)
@@ -202,3 +211,138 @@ class SqlAlchemyMessageRepository:
         )
         rows = await self._session.scalars(statement)
         return [_to_message(row) for row in reversed(list(rows))]
+
+    async def save_feedback(
+        self, message_id: str, language_id: str, feedback: TurnFeedback
+    ) -> MessageFeedback:
+        """Store the closing turn of one user message (S7), replacing it when it already exists.
+
+        A retried turn (`GET /stream` again with the same message) must not duplicate or fail: the
+        previous row is deleted and the new one written, children included by `ON DELETE CASCADE`.
+        """
+        previous = await self._session.scalar(
+            select(MessageFeedbackRow).where(MessageFeedbackRow.message_id == message_id)
+        )
+        if previous is not None:
+            await self._session.delete(previous)
+            await self._session.flush()
+
+        created_at = utc_now()
+        row = MessageFeedbackRow(id=str(uuid4()), message_id=message_id, created_at=created_at)
+        self._session.add(row)
+        await self._session.flush()
+
+        corrections: list[Correction] = []
+        for position, draft in enumerate(feedback.corrections):
+            self._session.add(
+                MessageCorrectionRow(
+                    id=str(uuid4()),
+                    feedback_id=row.id,
+                    position=position,
+                    original=draft.original,
+                    corrected=draft.corrected,
+                    explanation=draft.explanation,
+                )
+            )
+            corrections.append(
+                Correction(
+                    original=draft.original,
+                    corrected=draft.corrected,
+                    explanation=draft.explanation,
+                )
+            )
+
+        vocabulary: list[VocabularyItem] = []
+        for position, draft in enumerate(feedback.vocabulary):
+            self._session.add(
+                VocabularyItemRow(
+                    id=str(uuid4()),
+                    # The conversation's language, never the active one (S8).
+                    language_id=language_id,
+                    feedback_id=row.id,
+                    position=position,
+                    term=draft.term,
+                    translation=draft.translation,
+                    note=draft.note,
+                    created_at=created_at,
+                )
+            )
+            vocabulary.append(
+                VocabularyItem(
+                    term=draft.term,
+                    translation=draft.translation,
+                    note=draft.note,
+                    language_id=language_id,
+                )
+            )
+
+        await self._session.flush()
+        return MessageFeedback(
+            message_id=message_id,
+            corrections=corrections,
+            vocabulary=vocabulary,
+            created_at=created_at,
+        )
+
+    async def feedback_for_messages(self, message_ids: Sequence[str]) -> dict[str, MessageFeedback]:
+        """The closing turns of a page of messages, in one query (no N+1).
+
+        The two `LEFT JOIN`s cross corrections with vocabulary, so the rows are folded back by
+        `(message, position)`; both lists are small by contract (5 and 8) and empty for most
+        messages, which keeps this cheaper than one query per message.
+        """
+        ids = list(dict.fromkeys(message_ids))
+        if not ids:
+            return {}
+
+        statement = (
+            select(MessageFeedbackRow, MessageCorrectionRow, VocabularyItemRow)
+            .outerjoin(
+                MessageCorrectionRow,
+                MessageCorrectionRow.feedback_id == MessageFeedbackRow.id,
+            )
+            .outerjoin(
+                VocabularyItemRow,
+                VocabularyItemRow.feedback_id == MessageFeedbackRow.id,
+            )
+            .where(MessageFeedbackRow.message_id.in_(ids))
+            .order_by(
+                MessageFeedbackRow.message_id,
+                MessageCorrectionRow.position,
+                VocabularyItemRow.position,
+            )
+        )
+        rows = await self._session.execute(statement)
+
+        corrections: dict[str, dict[int, Correction]] = {}
+        vocabulary: dict[str, dict[int, VocabularyItem]] = {}
+        # Insertion-ordered, so the answer follows the query even after the cross join repeats rows.
+        order: dict[str, None] = {}
+        created_at: dict[str, datetime] = {}
+        for feedback_row, correction_row, vocabulary_row in rows:
+            message_id = feedback_row.message_id
+            order.setdefault(message_id, None)
+            created_at[message_id] = feedback_row.created_at
+            if correction_row is not None:
+                corrections.setdefault(message_id, {})[correction_row.position] = Correction(
+                    original=correction_row.original,
+                    corrected=correction_row.corrected,
+                    explanation=correction_row.explanation,
+                )
+            if vocabulary_row is not None:
+                vocabulary.setdefault(message_id, {})[vocabulary_row.position] = VocabularyItem(
+                    term=vocabulary_row.term,
+                    translation=vocabulary_row.translation,
+                    note=vocabulary_row.note,
+                    language_id=vocabulary_row.language_id,
+                )
+
+        return {
+            message_id: MessageFeedback(
+                message_id=message_id,
+                corrections=list(corrections.get(message_id, {}).values()),
+                vocabulary=list(vocabulary.get(message_id, {}).values()),
+                created_at=created_at[message_id],
+            )
+            for message_id in order
+        }

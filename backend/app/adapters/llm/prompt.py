@@ -1,25 +1,45 @@
-"""Tutor prompt, versioned in the repository (F3 S3).
+"""Tutor prompts, versioned in the repository (F3 S3, S7).
 
-Two files carry the prompt: the system prompt with the tutor rules and the turn template that
-frames the history and the new message. `PROMPT_VERSION` is asserted by the tests so a change in
-behavior is visible in the diff.
+Two prompt artifacts live here:
+
+- `tutor.v1.md` + `turn.v1.txt`: the system prompt with the tutor rules and the turn template that
+  frames the history and the new message.
+- `feedback.v1.md`: the closing-turn prompt. It carries both halves in one versioned file (the
+  system rules and the turn template after a marker) so the closing behavior changes in one diff.
+
+`PROMPT_VERSION` and `PROMPT_VERSION_FEEDBACK` are asserted by the tests so a change in behavior is
+visible in the diff.
 """
 
+from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
 from string import Template
 
-from app.ports.llm import TutorContext, TutorTurn
+from app.ports.llm import TurnMessage, TutorContext, TutorTurn
 
 PROMPT_VERSION = "tutor.v1"
+PROMPT_VERSION_FEEDBACK = "feedback.v1"
 
 _PROMPTS_DIR = Path(__file__).resolve().parent / "prompts"
 _NO_HISTORY = "(todavía no hay mensajes)"
+# Splits `feedback.vN.md` into the system prompt and the turn template.
+_TURN_MARKER = "<!-- turn -->"
+
+
+def _render_history(history: Sequence[TurnMessage]) -> str:
+    return (
+        "\n".join(
+            f"{'Estudiante' if message.author.value == 'user' else 'Tutor'}: {message.content}"
+            for message in history
+        )
+        or _NO_HISTORY
+    )
 
 
 @dataclass(frozen=True, slots=True)
 class TutorPrompt:
-    """The versioned prompt files, ready to render for one turn."""
+    """The versioned tutor prompt files, ready to render for one turn."""
 
     system: str
     turn: str
@@ -43,14 +63,41 @@ class TutorPrompt:
         )
 
     def render_turn(self, turn: TutorTurn) -> str:
-        history = (
-            "\n".join(
-                f"{'Estudiante' if message.author.value == 'user' else 'Tutor'}: {message.content}"
-                for message in turn.history
-            )
-            or _NO_HISTORY
-        )
         return Template(self.turn).substitute(
-            history=history,
+            history=_render_history(turn.history),
             user_message=turn.user_message,
+        )
+
+
+@dataclass(frozen=True, slots=True)
+class FeedbackPrompt:
+    """The closing-turn prompt: the same context, plus the reply the tutor already sent (S7)."""
+
+    system: str
+    turn: str
+
+    @classmethod
+    def load(cls, version: str = PROMPT_VERSION_FEEDBACK) -> "FeedbackPrompt":
+        if not version.startswith("feedback."):
+            raise ValueError(f"unexpected prompt version: {version}")
+        suffix = version.removeprefix("feedback.")
+        text = (_PROMPTS_DIR / f"feedback.{suffix}.md").read_text(encoding="utf-8")
+        system, _, turn = text.partition(_TURN_MARKER)
+        if not turn.strip():
+            raise ValueError(f"{version} has no turn template after {_TURN_MARKER}")
+        return cls(system=f"{system.strip()}\n", turn=f"{turn.strip()}\n")
+
+    def render_system(self, context: TutorContext) -> str:
+        return Template(self.system).substitute(
+            language_name=context.language_name,
+            language_code=context.language_code,
+            level=context.level.value,
+            explanation_language=context.explanation_language,
+        )
+
+    def render_turn(self, turn: TutorTurn, reply: str) -> str:
+        return Template(self.turn).substitute(
+            history=_render_history(turn.history),
+            user_message=turn.user_message,
+            tutor_reply=reply,
         )
