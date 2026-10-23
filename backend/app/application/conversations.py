@@ -10,7 +10,10 @@ from app.domain.entities import (
     Conversation,
     ConversationMode,
     Message,
+    MessageAuthor,
+    MessageStatus,
     NewConversation,
+    NewMessage,
 )
 from app.domain.errors import ConversationNotFound, LanguageNotFound
 from app.ports.repositories import ConversationRepository, LanguageRepository, MessageRepository
@@ -93,6 +96,33 @@ class ConversationService:
     async def delete_conversation(self, conversation_id: str) -> None:
         await self._require_conversation(conversation_id)
         await self._conversations.delete_conversation(conversation_id)
+
+    async def send_message(
+        self,
+        conversation_id: str,
+        *,
+        content: str,
+        idempotency_key: str | None = None,
+    ) -> Message:
+        """Store the user turn; a retry with the same key resolves to the same message (S4)."""
+        await self._require_conversation(conversation_id)
+        key = (idempotency_key or "").strip() or None
+        if key is not None:
+            existing = await self._messages.find_message_by_key(conversation_id, key)
+            if existing is not None:
+                return existing
+
+        message = await self._messages.add_message(
+            NewMessage(
+                conversation_id=conversation_id,
+                author=MessageAuthor.USER,
+                content=content,
+                status=MessageStatus.SENT,
+                idempotency_key=key,
+            )
+        )
+        await self._conversations.record_message_activity(conversation_id, message.created_at)
+        return message
 
     async def _require_language(self, language_id: str) -> None:
         if await self._languages.get_language(language_id) is None:

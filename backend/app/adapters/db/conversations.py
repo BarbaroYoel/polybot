@@ -15,6 +15,7 @@ from app.domain.entities import (
     MessageAuthor,
     MessageStatus,
     NewConversation,
+    NewMessage,
 )
 
 # What the history is ordered by: the last message, or the creation when the conversation is empty.
@@ -105,6 +106,14 @@ class SqlAlchemyConversationRepository:
         await self._session.delete(row)
         await self._session.flush()
 
+    async def record_message_activity(self, conversation_id: str, at: datetime) -> None:
+        row = await self._session.get(ConversationRow, conversation_id)
+        if row is None:
+            raise LookupError(conversation_id)
+        row.message_count += 1
+        row.last_message_at = at
+        await self._session.flush()
+
 
 class SqlAlchemyMessageRepository:
     """`MessageRepository` port over SQLAlchemy."""
@@ -132,3 +141,27 @@ class SqlAlchemyMessageRepository:
             statement.order_by(MessageRow.created_at, MessageRow.id).limit(limit)
         )
         return [_to_message(row) for row in rows]
+
+    async def add_message(self, draft: NewMessage) -> Message:
+        row = MessageRow(
+            id=str(uuid4()),
+            conversation_id=draft.conversation_id,
+            author=draft.author.value,
+            content=draft.content,
+            translation=draft.translation,
+            status=draft.status.value,
+            idempotency_key=draft.idempotency_key,
+            created_at=utc_now(),
+        )
+        self._session.add(row)
+        await self._session.flush()
+        return _to_message(row)
+
+    async def find_message_by_key(self, conversation_id: str, key: str) -> Message | None:
+        row = await self._session.scalar(
+            select(MessageRow).where(
+                MessageRow.conversation_id == conversation_id,
+                MessageRow.idempotency_key == key,
+            )
+        )
+        return _to_message(row) if row else None

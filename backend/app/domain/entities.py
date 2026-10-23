@@ -97,3 +97,13 @@ class NewConversation:
     language_id: str
     mode: ConversationMode
     title: str
+
+
+@dataclass(frozen=True, slots=True)
+class NewMessage:
+    conversation_id: str
+    author: MessageAuthor
+    content: str
+    status: MessageStatus = MessageStatus.SENT
+    translation: str | None = None
+    idempotency_key: str | None = None

@@ -1,6 +1,8 @@
 """`/conversations` endpoints (docs/api-contract.md §3 "Conversaciones y mensajes")."""
 
-from fastapi import APIRouter, Depends, Query
+from typing import Annotated
+
+from fastapi import APIRouter, Depends, Header, Query
 
 from app.api.v1.query import parse_cursor
 from app.api.v1.schemas import (
@@ -9,6 +11,8 @@ from app.api.v1.schemas import (
     ConversationOut,
     ConversationPage,
     ConversationUpdate,
+    MessageCreate,
+    MessageOut,
     MessagePage,
 )
 from app.application.conversations import ConversationService
@@ -84,3 +88,28 @@ async def delete_conversation(
     service: ConversationService = Depends(get_conversation_service),
 ) -> None:
     await service.delete_conversation(conversation_id)
+
+
+@router.post(
+    "/{conversation_id}/messages",
+    response_model=MessageOut,
+    status_code=201,
+    summary="Send a user message (F3)",
+)
+async def send_message(
+    conversation_id: str,
+    payload: MessageCreate,
+    idempotency_key: Annotated[
+        str | None,
+        Header(
+            alias="Idempotency-Key",
+            max_length=120,
+            description="Retrying with the same key resolves to the same turn",
+        ),
+    ] = None,
+    service: ConversationService = Depends(get_conversation_service),
+) -> MessageOut:
+    message = await service.send_message(
+        conversation_id, content=payload.content, idempotency_key=idempotency_key
+    )
+    return MessageOut.from_entity(message)

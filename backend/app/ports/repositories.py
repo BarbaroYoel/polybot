@@ -10,6 +10,7 @@ from app.domain.entities import (
     Message,
     NewConversation,
     NewLanguage,
+    NewMessage,
     WeeklyGoal,
 )
 
@@ -53,6 +54,9 @@ class ConversationRepository(Protocol):
 
     async def rename_conversation(self, conversation_id: str, title: str) -> Conversation: ...
 
+    async def record_message_activity(self, conversation_id: str, at: datetime) -> None:
+        """Bump the message count and the last activity after a message is stored."""
+
     async def delete_conversation(self, conversation_id: str) -> None: ...
 
 
@@ -65,3 +69,8 @@ class MessageRepository(Protocol):
         after: tuple[datetime, str] | None = None,
     ) -> list[Message]:
         """Messages of one conversation, oldest first."""
+
+    async def add_message(self, draft: NewMessage) -> Message: ...
+
+    async def find_message_by_key(self, conversation_id: str, key: str) -> Message | None:
+        """The turn already stored for that retry key, if any (idempotent sends)."""

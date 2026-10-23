@@ -58,6 +58,11 @@ class MessageRow(Base):
     content: Mapped[str] = mapped_column(Text, nullable=False)
     translation: Mapped[str | None] = mapped_column(Text, nullable=True)
     status: Mapped[str] = mapped_column(String(12), nullable=False, default="sent")
+    # Client-supplied retry key: the same key in a conversation resolves to the same turn (F3).
+    idempotency_key: Mapped[str | None] = mapped_column(String(120), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
 
-    __table_args__ = (Index("ix_messages_conversation_created", "conversation_id", "created_at"),)
+    __table_args__ = (
+        Index("ix_messages_conversation_created", "conversation_id", "created_at"),
+        Index("ix_messages_idempotency_key", "conversation_id", "idempotency_key", unique=True),
+    )
