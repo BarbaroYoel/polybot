@@ -1,6 +1,8 @@
 """Request and response models. They mirror docs/api-contract.md §2 field by field."""
 
-from pydantic import BaseModel, Field
+from typing import Annotated
+
+from pydantic import BaseModel, Field, StringConstraints
 
 from app.application.pagination import Page
 from app.core.dates import to_iso
@@ -71,6 +73,16 @@ class ConversationCreate(BaseModel):
 
 class ConversationUpdate(BaseModel):
     title: str = Field(min_length=1, max_length=120)
+
+
+# Contract §5 will list the message limit; a Portuguese/Spanish turn fits comfortably in 4000 chars.
+MessageContent = Annotated[
+    str, StringConstraints(strip_whitespace=True, min_length=1, max_length=4000)
+]
+
+
+class MessageCreate(BaseModel):
+    content: MessageContent
 
 
 class MessageOut(BaseModel):
