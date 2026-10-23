@@ -137,6 +137,9 @@ class TutorService:
         history = await self._messages.list_messages_before(
             conversation_id, message, limit=self._history_limit
         )
+        # A turn that failed before its first token leaves an empty `error` row; the prompt must not
+        # carry empty turns (the student's own message still travels).
+        history = [row for row in history if row.content.strip()]
         stored = await self._messages.add_message(
             NewMessage(
                 conversation_id=conversation_id,

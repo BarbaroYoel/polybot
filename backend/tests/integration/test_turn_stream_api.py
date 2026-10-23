@@ -342,3 +342,26 @@ def test_the_stream_is_text_event_stream(api_client: TestClient, fake_llm: FakeL
     assert response.headers["content-type"].startswith("text/event-stream")
     assert response.headers["cache-control"] == "no-cache"
     assert response.headers["x-accel-buffering"] == "no"
+
+
+def test_a_failed_turn_without_text_never_reaches_the_next_prompt(
+    api_client: TestClient, fake_llm: FakeLlm
+) -> None:
+    # A turn that fails before its first token stores an empty `error` row. The row belongs to the
+    # history, but an empty tutor turn must not become part of the next prompt.
+    fake_llm.deltas = []
+    fake_llm.failure = LlmUnavailable("provider down")
+    failed = send_user_message(api_client, CONVERSATION_FR_CAFE, "Bonjour")
+    assert [name for name, _ in read_turn(api_client, CONVERSATION_FR_CAFE, failed["id"])] == [
+        "error"
+    ]
+
+    fake_llm.deltas = ["Bien"]
+    fake_llm.failure = None
+    fresh = send_user_message(api_client, CONVERSATION_FR_CAFE, "Encore une fois")
+    read_turn(api_client, CONVERSATION_FR_CAFE, fresh["id"])
+
+    assert fake_llm.turn is not None
+    assert all(message.content.strip() for message in fake_llm.turn.history)
+    # What the student wrote still travels: only the empty tutor turn is dropped.
+    assert any(message.content == "Bonjour" for message in fake_llm.turn.history)
