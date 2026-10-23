@@ -19,7 +19,9 @@ import codecs
 import contextlib
 import json
 import logging
+import os
 import shutil
+import signal
 import tempfile
 from collections.abc import AsyncIterator, Sequence
 from contextlib import asynccontextmanager
@@ -41,7 +43,12 @@ _ISOLATION_FLAGS = (
     "--no-extensions",
     "--no-skills",
     "--no-mcp",
+    "--no-prompt-templates",
+    "--no-approve",
 )
+
+# A runaway answer is cut instead of stored: the UI never renders more than this per turn.
+MAX_REPLY_CHARS = 20_000
 
 _FAILURE_MESSAGES = {
     "error": "El tutor no pudo responder. Vuelve a intentar en unos segundos.",
@@ -91,16 +98,18 @@ class PiCliAdapter:
     async def stream_reply(self, turn: TutorTurn) -> AsyncIterator[str]:
         argv = self._argv(self._prompt.render_system(turn.context))
         prompt = self._prompt.render_turn(turn)
+        # The budget covers startup, prompt delivery and the stream: a child that never reads its
+        # stdin must not outlive the turn budget.
         try:
-            async with self._run(argv, prompt) as (process, stderr_task):
-                async with asyncio.timeout(self._timeout):
+            async with asyncio.timeout(self._timeout):
+                async with self._run(argv, prompt) as (process, stderr_task):
                     async for delta in self._deltas(process.stdout):
                         yield delta
                     await process.wait()
 
-                if process.returncode != 0:
-                    self._log_failure(process.returncode, await stderr_task)
-                    raise LlmUnavailable(_FAILURE_MESSAGES["error"])
+                    if process.returncode != 0:
+                        self._log_failure(process.returncode, await stderr_task)
+                        raise LlmUnavailable(_FAILURE_MESSAGES["error"])
         except TimeoutError as exc:
             raise LlmTimeout(_FAILURE_MESSAGES["timeout"]) from exc
 
@@ -109,14 +118,14 @@ class PiCliAdapter:
         argv = self._argv(self._feedback.render_system(turn.context))
         prompt = self._feedback.render_turn(turn, reply)
         try:
-            async with self._run(argv, prompt) as (process, stderr_task):
-                async with asyncio.timeout(self._timeout):
+            async with asyncio.timeout(self._timeout):
+                async with self._run(argv, prompt) as (process, stderr_task):
                     answer = await self._collected(process.stdout)
                     await process.wait()
 
-                if process.returncode != 0:
-                    self._log_failure(process.returncode, await stderr_task)
-                    raise LlmUnavailable(_FAILURE_MESSAGES["error"])
+                    if process.returncode != 0:
+                        self._log_failure(process.returncode, await stderr_task)
+                        raise LlmUnavailable(_FAILURE_MESSAGES["error"])
         except TimeoutError as exc:
             raise LlmTimeout(_FAILURE_MESSAGES["timeout"]) from exc
 
@@ -134,6 +143,8 @@ class PiCliAdapter:
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
                 cwd=workdir,
+                # Its own session lets `_terminate` kill the whole group, children included.
+                start_new_session=True,
             )
         except BaseException:
             shutil.rmtree(workdir, ignore_errors=True)
@@ -154,6 +165,7 @@ class PiCliAdapter:
     async def _deltas(self, stdout: asyncio.StreamReader) -> AsyncIterator[str]:
         completed = False
         saw_text = False
+        written = 0
         async for record in _records(stdout):
             kind = record.get("type")
 
@@ -163,11 +175,15 @@ class PiCliAdapter:
                 if event_type == "text_delta":
                     delta = event.get("delta")
                     if isinstance(delta, str) and delta:
+                        written += len(delta)
+                        if written > MAX_REPLY_CHARS:
+                            raise LlmUnavailable(_FAILURE_MESSAGES["error"])
                         saw_text = True
                         yield delta
                 elif event_type == "error":
                     reason = str(event.get("reason") or "error")
-                    logger.warning("pi stream error: %s", event.get("error"))
+                    # Only the reason: the payload can carry provider-side detail.
+                    logger.warning("pi stream ended with %s", reason)
                     raise LlmUnavailable(_FAILURE_MESSAGES.get(reason, _FAILURE_MESSAGES["error"]))
 
             elif kind == "message_end":
@@ -364,9 +380,10 @@ def _parse_record(line: str) -> dict[str, Any] | None:
 
 
 async def _terminate(process: asyncio.subprocess.Process) -> None:
-    """Kill the subprocess if it is still alive; cancellation must not leave it running."""
+    """Kill the subprocess group if it is still alive; cancellation leaves nothing running."""
     if process.returncode is None:
-        with contextlib.suppress(ProcessLookupError):
-            process.kill()
+        with contextlib.suppress(ProcessLookupError, PermissionError):
+            # `start_new_session=True` made the child a group leader: kill its children too.
+            os.killpg(os.getpgid(process.pid), signal.SIGKILL)
     with contextlib.suppress(Exception):
         await process.wait()

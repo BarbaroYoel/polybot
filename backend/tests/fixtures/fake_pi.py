@@ -163,6 +163,20 @@ def run_garbage() -> None:
     assistant_end("ok")
 
 
+def run_huge() -> None:
+    header()
+    user_message("hola")
+    assistant_start()
+    delta("x" * 300_000)
+    assistant_end("x" * 300_000)
+
+
+def run_no_stdin() -> None:
+    # A child that never reads its stdin: a prompt larger than the pipe buffer blocks `drain()`.
+    header()
+    time.sleep(120)
+
+
 def run_slow() -> None:
     header()
     user_message("hola")
@@ -241,6 +255,10 @@ def main() -> None:
         run_garbage()
     elif MODE == "slow":
         run_slow()
+    elif MODE == "huge":
+        run_huge()
+    elif MODE == "no-stdin":
+        run_no_stdin()
     elif MODE in {"feedback", "feedback-json"}:
         run_feedback_json()
     elif MODE == "feedback-broken":

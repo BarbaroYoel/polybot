@@ -106,6 +106,8 @@ def test_the_repository_stays_out_of_reach(monkeypatch: pytest.MonkeyPatch, tmp_
         "--no-extensions",
         "--no-skills",
         "--no-mcp",
+        "--no-prompt-templates",
+        "--no-approve",
     ):
         assert flag in argv
     assert "--system-prompt" in argv
@@ -177,3 +179,48 @@ def test_a_slow_turn_times_out_instead_of_hanging(monkeypatch: pytest.MonkeyPatc
     with pytest.raises(LlmTimeout):
         asyncio.run(scenario())
     assert time.monotonic() - started < 10
+
+
+def test_the_whole_turn_is_inside_the_timeout(monkeypatch: pytest.MonkeyPatch) -> None:
+    # A child that never reads stdin blocks `drain()` once the prompt outgrows the pipe buffer.
+    # The budget must cover startup and prompt delivery, not only the event loop.
+    adapter = make_adapter(monkeypatch, "no-stdin", timeout_seconds=1.0)
+    huge = TutorTurn(
+        context=make_turn().context,
+        history=[TurnMessage(author=MessageAuthor.USER, content="x" * 4000) for _ in range(30)],
+        user_message="Bonjour",
+    )
+
+    async def scenario() -> list[str]:
+        return [delta async for delta in adapter.stream_reply(huge)]
+
+    started = time.monotonic()
+    with pytest.raises(LlmTimeout):
+        asyncio.run(scenario())
+    assert time.monotonic() - started < 10
+
+
+def test_the_subprocess_runs_in_its_own_session(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    pid_file = tmp_path / "pid.txt"
+    monkeypatch.setenv("FAKE_PI_PID_FILE", str(pid_file))
+    adapter = make_adapter(monkeypatch, "slow")
+
+    async def scenario() -> int:
+        stream = adapter.stream_reply(make_turn())
+        assert await anext(stream) == "Bon"
+        pid = int(pid_file.read_text(encoding="utf-8"))
+        # Its own session means the adapter can kill the whole process group on cancellation.
+        assert os.getsid(pid) == pid
+        await stream.aclose()
+        return pid
+
+    asyncio.run(scenario())
+
+
+def test_a_runaway_reply_is_cut_instead_of_stored(monkeypatch: pytest.MonkeyPatch) -> None:
+    adapter = make_adapter(monkeypatch, "huge")
+
+    with pytest.raises(LlmUnavailable):
+        collect(adapter)
