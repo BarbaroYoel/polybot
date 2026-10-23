@@ -63,10 +63,15 @@ Un import que cruce estas flechas al revés es un defecto de arquitectura, no un
 
 ### 4.1 Chat de texto
 
-1. `POST /api/v1/conversations/{id}/messages` con el texto del usuario.
-2. `application` persiste el mensaje y carga el contexto de la conversación (idioma, nivel, preferencias).
+1. `POST /api/v1/conversations/{id}/messages` con el texto del usuario (idempotente por `Idempotency-Key`).
+2. `application` persiste el mensaje y, al abrir el turno, un mensaje del tutor en `streaming`.
 3. Se llama al puerto `LLM` con el prompt del tutor y se transmite la respuesta por `GET .../stream` (SSE).
-4. Al cerrar el turno se guarda el mensaje del tutor y, si corresponde, correcciones y vocabulario sugerido.
+4. Al terminar se guarda el mensaje del tutor como `sent` y se emite `message_end`.
+5. Al cerrar el turno, una segunda invocación del puerto `LLM` produce correcciones y vocabulario; se persisten y se
+   emiten como `correction` y `vocabulary`. Un fallo de ese cierre no rompe la conversación: el texto ya está guardado.
+
+El adaptador del tutor es una instancia de Pi por invocación, aislada de herramientas y del repositorio (ADR-013).
+La base es la única fuente de verdad: el historial viaja en cada turno y no hay sesión del proveedor.
 
 ### 4.2 Turno de voz
 

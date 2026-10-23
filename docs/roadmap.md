@@ -46,13 +46,19 @@ y `npm run build` verdes, y una sonda con Chrome headless contra la API real que
 `/chat/:id`, el cambio de contexto al abrir una conversación de otro idioma, el 404 de una conversación inexistente
 y el estado de error con el backend caído. Detalle en `odd/tasks/f2-backend-skeleton.md` §Verificación.
 
-## F3 — Chat de texto real
+## F3 — Chat de texto real — **completada** (rama `feat/f3-real-text-chat`)
 
-- Puerto `LLM` + primer adaptador; prompt del tutor versionado.
-- Streaming SSE del turno, con cancelación.
-- Correcciones y vocabulario sugerido al cerrar el turno.
+Alcance, decisiones y evidencia: `odd/tasks/f3-real-text-chat.md`.
 
-**Verificación:** conversación real por texto, con historial y cambio de idioma sin mezclar datos.
+- [x] Puerto `LLM` + primer adaptador (una instancia de Pi por turno, ADR-013); prompt del tutor versionado (`tutor.v1`).
+- [x] Streaming SSE del turno, con cancelación real y estado `error` persistido.
+- [x] Correcciones y vocabulario sugerido al cerrar el turno, persistidos por idioma y devueltos en el detalle.
+- [x] La PWA conversa de verdad: tokens en vivo, «Pensando…», «Detener», tarjetas de corrección y vocabulario.
+
+**Verificación:** `uv run pytest` (102 passed), `ruff format`/`ruff check` limpios, `npm run typecheck` y
+`npm run build` verdes, y turnos reales contra Pi en francés y en inglés: tokens, `message_end`, `correction` y
+`vocabulary`, con el feedback persistido y sin mezclar datos entre idiomas. Detalle y límites conocidos (arranque
+lento intermitente del proveedor, 60 s de presupuesto) en el documento de la fase.
 
 ## F4 — Voz
 
