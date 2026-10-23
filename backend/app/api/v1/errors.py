@@ -11,9 +11,13 @@ from app.domain.errors import (
     ActiveLanguageCannotBeArchived,
     ConversationNotFound,
     DomainError,
+    InvalidTurnMessage,
     LanguageAlreadyExists,
     LanguageNotFound,
     LastLanguageCannotBeArchived,
+    LlmTimeout,
+    LlmUnavailable,
+    MessageNotFound,
 )
 
 _DOMAIN_ERRORS: dict[type[DomainError], tuple[int, str, str]] = {
@@ -26,6 +30,26 @@ _DOMAIN_ERRORS: dict[type[DomainError], tuple[int, str, str]] = {
         404,
         "conversation_not_found",
         "Esa conversación no existe o pertenece a otro idioma.",
+    ),
+    MessageNotFound: (
+        404,
+        "message_not_found",
+        "No encontramos ese mensaje en esta conversación.",
+    ),
+    InvalidTurnMessage: (
+        400,
+        "invalid_turn_message",
+        "Solo se puede transmitir un mensaje del usuario.",
+    ),
+    LlmUnavailable: (
+        502,
+        "llm_unavailable",
+        "El tutor no pudo responder. Vuelve a intentar en unos segundos.",
+    ),
+    LlmTimeout: (
+        504,
+        "llm_timeout",
+        "El tutor tardó demasiado en responder. Vuelve a intentar.",
     ),
     LanguageAlreadyExists: (
         409,
@@ -51,8 +75,16 @@ _UNEXPECTED = (
 )
 
 
+def describe_domain_error(exc: DomainError) -> tuple[int, str, str]:
+    """Status and contract `code`/`message` for a domain failure.
+
+    The exception handler and the SSE `error` event share it: one mapping, two transports.
+    """
+    return _DOMAIN_ERRORS.get(type(exc), _UNEXPECTED)
+
+
 def install_domain_error_handler(app: FastAPI) -> None:
     @app.exception_handler(DomainError)
     async def handle_domain_error(request: Request, exc: DomainError) -> JSONResponse:
-        status_code, code, message = _DOMAIN_ERRORS.get(type(exc), _UNEXPECTED)
+        status_code, code, message = describe_domain_error(exc)
         return error_response(request, status_code, code, message)

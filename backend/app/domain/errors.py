@@ -17,6 +17,14 @@ class ConversationNotFound(DomainError):
     pass
 
 
+class MessageNotFound(DomainError):
+    """The message does not exist or belongs to another conversation (F3)."""
+
+
+class InvalidTurnMessage(DomainError):
+    """Only a user message starts a tutor turn (F3)."""
+
+
 class LanguageAlreadyExists(DomainError):
     pass
 

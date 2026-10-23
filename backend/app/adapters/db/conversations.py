@@ -165,3 +165,40 @@ class SqlAlchemyMessageRepository:
             )
         )
         return _to_message(row) if row else None
+
+    async def get_message(self, message_id: str) -> Message | None:
+        row = await self._session.get(MessageRow, message_id)
+        return _to_message(row) if row else None
+
+    async def update_message(
+        self, message_id: str, *, content: str, status: MessageStatus
+    ) -> Message:
+        row = await self._session.get(MessageRow, message_id)
+        if row is None:
+            raise LookupError(message_id)
+        row.content = content
+        row.status = status.value
+        await self._session.flush()
+        return _to_message(row)
+
+    async def list_messages_before(
+        self, conversation_id: str, before: Message, *, limit: int
+    ) -> list[Message]:
+        # Newest first to keep the window next to the turn, then reversed for the prompt.
+        statement = (
+            select(MessageRow)
+            .where(
+                MessageRow.conversation_id == conversation_id,
+                or_(
+                    MessageRow.created_at < before.created_at,
+                    and_(
+                        MessageRow.created_at == before.created_at,
+                        MessageRow.id < before.id,
+                    ),
+                ),
+            )
+            .order_by(MessageRow.created_at.desc(), MessageRow.id.desc())
+            .limit(limit)
+        )
+        rows = await self._session.scalars(statement)
+        return [_to_message(row) for row in reversed(list(rows))]

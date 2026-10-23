@@ -1,9 +1,13 @@
 """`/conversations` endpoints (docs/api-contract.md §3 "Conversaciones y mensajes")."""
 
-from typing import Annotated
+import json
+from collections.abc import AsyncIterator
+from typing import Annotated, Any
 
-from fastapi import APIRouter, Depends, Header, Query
+from fastapi import APIRouter, Depends, Header, Query, Request
+from fastapi.responses import StreamingResponse
 
+from app.api.v1.errors import describe_domain_error
 from app.api.v1.query import parse_cursor
 from app.api.v1.schemas import (
     ConversationCreate,
@@ -16,7 +20,9 @@ from app.api.v1.schemas import (
     MessagePage,
 )
 from app.application.conversations import ConversationService
-from app.core.dependencies import get_conversation_service
+from app.application.tutor import TurnCompleted, TurnError, TurnState, TurnToken, TutorService
+from app.core.dependencies import get_conversation_service, get_tutor_service
+from app.core.errors import error_body
 
 router = APIRouter(prefix="/conversations", tags=["conversations"])
 
@@ -113,3 +119,46 @@ async def send_message(
         conversation_id, content=payload.content, idempotency_key=idempotency_key
     )
     return MessageOut.from_entity(message)
+
+
+@router.get(
+    "/{conversation_id}/stream",
+    summary="Stream the tutor turn over SSE (F3)",
+    responses={
+        200: {"content": {"text/event-stream": {}}},
+        400: {"description": "The message is not a user message (`invalid_turn_message`)"},
+        404: {"description": "`conversation_not_found` or `message_not_found`"},
+    },
+)
+async def stream_turn(
+    conversation_id: str,
+    request: Request,
+    message_id: str = Query(min_length=1, description="The user message that starts the turn"),
+    service: TutorService = Depends(get_tutor_service),
+) -> StreamingResponse:
+    """Open a turn and stream it: `token`*, then `message_end`, or `error` (S5, S6)."""
+    # Validation runs before the response starts, so its failures still use the JSON envelope.
+    state = await service.begin_turn(conversation_id, message_id)
+    return StreamingResponse(
+        _turn_events(service, state, getattr(request.state, "request_id", "")),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
+
+
+async def _turn_events(
+    service: TutorService, state: TurnState, request_id: str
+) -> AsyncIterator[str]:
+    async for event in service.stream_turn(state):
+        if isinstance(event, TurnToken):
+            yield _sse("token", {"message_id": event.message_id, "delta": event.delta})
+        elif isinstance(event, TurnCompleted):
+            yield _sse("message_end", MessageOut.from_entity(event.message).model_dump(mode="json"))
+        elif isinstance(event, TurnError):
+            _, code, message = describe_domain_error(event.error)
+            yield _sse("error", error_body(code, message, request_id=request_id))
+
+
+def _sse(name: str, payload: dict[str, Any]) -> str:
+    """One contract event: `event: <name>\ndata: <json>` closed by a blank line."""
+    return f"event: {name}\ndata: {json.dumps(payload, ensure_ascii=False)}\n\n"

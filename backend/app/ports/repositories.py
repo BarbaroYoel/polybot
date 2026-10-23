@@ -8,6 +8,7 @@ from app.domain.entities import (
     Conversation,
     LanguageProfile,
     Message,
+    MessageStatus,
     NewConversation,
     NewLanguage,
     NewMessage,
@@ -71,6 +72,19 @@ class MessageRepository(Protocol):
         """Messages of one conversation, oldest first."""
 
     async def add_message(self, draft: NewMessage) -> Message: ...
+
+    async def get_message(self, message_id: str) -> Message | None:
+        """One message by id, or `None` when it does not exist."""
+
+    async def update_message(
+        self, message_id: str, *, content: str, status: MessageStatus
+    ) -> Message:
+        """Rewrite a streamed message once the turn closes; returns the stored row."""
+
+    async def list_messages_before(
+        self, conversation_id: str, before: Message, *, limit: int
+    ) -> list[Message]:
+        """The messages older than `before`, oldest first, at most `limit` of them."""
 
     async def find_message_by_key(self, conversation_id: str, key: str) -> Message | None:
         """The turn already stored for that retry key, if any (idempotent sends)."""
