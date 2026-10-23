@@ -1,6 +1,7 @@
 """Request and response models. They mirror docs/api-contract.md §2 field by field."""
 
-from typing import Annotated
+from collections.abc import Iterable, Mapping
+from typing import Annotated, Protocol
 
 from pydantic import BaseModel, Field, StringConstraints
 
@@ -15,6 +16,8 @@ from app.domain.entities import (
     MessageAuthor,
     MessageStatus,
 )
+from app.domain.feedback import MessageFeedback
+from app.ports.llm import TurnFeedback
 
 
 class WeeklyGoal(BaseModel):
@@ -85,6 +88,72 @@ class MessageCreate(BaseModel):
     content: MessageContent
 
 
+class CorrectionOut(BaseModel):
+    """One correction card of a closing turn (F3 S7)."""
+
+    original: str
+    corrected: str
+    explanation: str
+
+
+class VocabularyOut(BaseModel):
+    """One suggested term of the closing turn."""
+
+    term: str
+    translation: str
+    note: str | None
+
+
+class _CorrectionLike(Protocol):
+    original: str
+    corrected: str
+    explanation: str
+
+
+class _VocabularyLike(Protocol):
+    term: str
+    translation: str
+    note: str | None
+
+
+def _corrections(items: Iterable[_CorrectionLike]) -> list[CorrectionOut]:
+    return [
+        CorrectionOut(
+            original=item.original, corrected=item.corrected, explanation=item.explanation
+        )
+        for item in items
+    ]
+
+
+def _vocabulary(items: Iterable[_VocabularyLike]) -> list[VocabularyOut]:
+    return [
+        VocabularyOut(term=item.term, translation=item.translation, note=item.note)
+        for item in items
+    ]
+
+
+class MessageFeedbackOut(BaseModel):
+    """`Message.feedback`: `null` for tutor messages and for user messages with no closing turn."""
+
+    corrections: list[CorrectionOut]
+    vocabulary: list[VocabularyOut]
+
+    @classmethod
+    def from_entity(cls, feedback: MessageFeedback) -> "MessageFeedbackOut":
+        return cls(
+            corrections=_corrections(feedback.corrections),
+            vocabulary=_vocabulary(feedback.vocabulary),
+        )
+
+    @classmethod
+    def from_turn_feedback(cls, feedback: TurnFeedback) -> "MessageFeedbackOut":
+        """The closing events are emitted before the rows are read back, from the same drafts."""
+        return cls(
+            corrections=_corrections(feedback.corrections),
+            vocabulary=_vocabulary(feedback.vocabulary),
+        )
+
+
 class MessageOut(BaseModel):
     id: str
     conversation_id: str
@@ -92,10 +161,11 @@ class MessageOut(BaseModel):
     content: str
     translation: str | None
     status: MessageStatus
+    feedback: MessageFeedbackOut | None = None
     created_at: str
 
     @classmethod
-    def from_entity(cls, message: Message) -> "MessageOut":
+    def from_entity(cls, message: Message, feedback: MessageFeedback | None = None) -> "MessageOut":
         return cls(
             id=message.id,
             conversation_id=message.conversation_id,
@@ -103,6 +173,7 @@ class MessageOut(BaseModel):
             content=message.content,
             translation=message.translation,
             status=message.status,
+            feedback=MessageFeedbackOut.from_entity(feedback) if feedback is not None else None,
             created_at=to_iso(message.created_at),
         )
 
@@ -148,9 +219,15 @@ class MessagePage(BaseModel):
     next_cursor: str | None
 
     @classmethod
-    def from_page(cls, page: Page[Message]) -> "MessagePage":
+    def from_page(
+        cls,
+        page: Page[Message],
+        feedback: Mapping[str, MessageFeedback] | None = None,
+    ) -> "MessagePage":
+        """`feedback` arrives already fetched for the page: the schema never queries (no N+1)."""
+        attached = feedback or {}
         return cls(
-            items=[MessageOut.from_entity(row) for row in page.items],
+            items=[MessageOut.from_entity(row, attached.get(row.id)) for row in page.items],
             next_cursor=page.next_cursor,
         )
 

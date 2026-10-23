@@ -7,13 +7,15 @@ lifecycle and real framing without depending on the network, a model or credenti
 
 Behavior is driven by `FAKE_PI_MODE`:
 
-| Mode      | What it emits                                                        |
-|-----------|----------------------------------------------------------------------|
-| `ok`      | header, user message, two text deltas, authoritative `message_end`    |
-| `error`   | a provider `error` update and an assistant `message_end` with error   |
-| `garbage` | a non-JSON line before the normal stream                              |
-| `slow`    | one delta, then it sleeps until it is killed or times out             |
-| `feedback`| the closing-turn JSON the adapter parses                              |
+| Mode              | What it emits                                                       |
+|-------------------|---------------------------------------------------------------------|
+| `ok`              | header, user message, two text deltas, authoritative `message_end`   |
+| `error`           | a provider `error` update and an assistant `message_end` with error  |
+| `garbage`         | a non-JSON line before the normal stream                             |
+| `slow`            | one delta, then it sleeps until it is killed or times out            |
+| `feedback-json`   | the closing-turn JSON the adapter parses (F3 S7)                     |
+| `feedback`        | alias of `feedback-json`, kept for older fixtures                    |
+| `feedback-broken` | prose instead of JSON: the closing call must fail, not guess         |
 
 Tests read `FAKE_PI_PROMPT_FILE` (the prompt received on stdin), `FAKE_PI_SYSTEM_FILE` (the
 `--system-prompt` value), `FAKE_PI_ARGV_FILE` (the whole argv, so a test can prove the flags that
@@ -169,21 +171,41 @@ def run_slow() -> None:
     time.sleep(120)
 
 
-def run_feedback() -> None:
+FEEDBACK_PAYLOAD = {
+    "corrections": [
+        {
+            "original": "Je suis allé au café hier",
+            "corrected": "Je suis allé au café hier.",
+            "explanation": "Falta el punto final.",
+        },
+        {
+            "original": "j'ai prends un café",
+            "corrected": "je prends un café",
+            "explanation": "«prendre» va en presente sin auxiliar.",
+        },
+    ],
+    "vocabulary": [
+        {"term": "un café", "translation": "un café", "note": "masculino"},
+        {"term": "s'il vous plaît", "translation": "por favor", "note": None},
+    ],
+}
+
+
+def run_feedback_json() -> None:
     header()
     user_message("hola")
     assistant_start()
-    payload = {
-        "corrections": [
-            {
-                "original": "Je suis allé au café hier",
-                "corrected": "Je suis allé au café hier.",
-                "explanation": "Falta el punto final",
-            }
-        ],
-        "vocabulary": [{"term": "un café", "translation": "un café", "note": "masculino"}],
-    }
-    text = json.dumps(payload, ensure_ascii=False)
+    text = json.dumps(FEEDBACK_PAYLOAD, ensure_ascii=False)
+    delta(text)
+    assistant_end(text)
+
+
+def run_feedback_broken() -> None:
+    """The model answers with prose: the adapter cannot parse it and must fail."""
+    header()
+    user_message("hola")
+    assistant_start()
+    text = "No pude revisar tu mensaje, probá otra vez en un rato."
     delta(text)
     assistant_end(text)
 
@@ -219,8 +241,10 @@ def main() -> None:
         run_garbage()
     elif MODE == "slow":
         run_slow()
-    elif MODE == "feedback":
-        run_feedback()
+    elif MODE in {"feedback", "feedback-json"}:
+        run_feedback_json()
+    elif MODE == "feedback-broken":
+        run_feedback_broken()
     elif MODE == "empty":
         run_empty()
     elif MODE == "fail":

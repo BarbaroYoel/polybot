@@ -109,6 +109,8 @@ def test_the_stream_emits_tokens_and_stores_the_tutor_message(
         "content": "Bonjour !",
         "translation": None,
         "status": "sent",
+        # Only user messages have a closing turn (F3 S7).
+        "feedback": None,
         "created_at": ended["created_at"],
     }
     assert ended["created_at"].endswith("Z")

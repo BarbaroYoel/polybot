@@ -29,10 +29,21 @@ Prefijo: `/api/v1`. Formato: JSON UTF-8. Fechas: ISO 8601 UTC (`2026-10-22T14:03
 { "id": "uuid", "conversation_id": "uuid", "author": "tutor|user",
   "content": "Bonjour ! Comment ça va ?", "translation": null,
   "audio_url": "/api/v1/voice/speech/abc.mp3", "status": "sent|streaming|error",
+  "feedback": { "corrections": [ { "original": "...", "corrected": "...", "explanation": "..." } ],
+                "vocabulary": [ { "term": "...", "translation": "...", "note": "..." } ] },
   "created_at": "..." }
 
 // Lesson / StudyPlan / Progress: ver desing.md §12. Se definen al implementar cada fase.
 ```
+
+`feedback` es el cierre del turno del mensaje. **F3.**
+
+- Solo los mensajes del usuario llevan `feedback`; en los del tutor siempre es `null`.
+- En un mensaje del usuario es `null` cuando todavía no se cerró su turno, cuando el cierre falló
+  o cuando no había nada que corregir ni vocabulario nuevo que sugerir.
+- `corrections` viene ordenado y tiene como máximo 5 elementos; `vocabulary`, como máximo 8. Los
+  ítems incompletos se descartan, nunca llegan vacíos.
+- `note` puede ser `null` (término sin aclaración).
 
 ## 3. Endpoints v0
 
@@ -54,7 +65,7 @@ Prefijo: `/api/v1`. Formato: JSON UTF-8. Fechas: ISO 8601 UTC (`2026-10-22T14:03
 |---|---|---|
 | GET | `/conversations?language_id=&limit=&cursor=` | Historial del idioma, por última actividad (último mensaje o, si no hay, la creación). `language_id` es obligatorio; un idioma inexistente es 404 `language_not_found`. |
 | POST | `/conversations` | Crea conversación (`language_id`, `mode`, `title?`) y responde 201. Sin `title`, el servidor pone `Nueva conversación`. |
-| GET | `/conversations/{id}?language_id=&messages_limit=&messages_cursor=` | Conversación con `messages: { items, next_cursor }`. `language_id` es opcional y sirve de guarda: si la conversación pertenece a otro idioma, responde 404 `conversation_not_found`. |
+| GET | `/conversations/{id}?language_id=&messages_limit=&messages_cursor=` | Conversación con `messages: { items, next_cursor }`; cada mensaje del usuario trae su `feedback` (`null` si no tiene). `language_id` es opcional y sirve de guarda: si la conversación pertenece a otro idioma, responde 404 `conversation_not_found`. |
 | PATCH | `/conversations/{id}` | Renombra (`title`). |
 | DELETE | `/conversations/{id}` | Elimina con confirmación previa en la UI; borra sus mensajes. Responde 204. |
 | POST | `/conversations/{id}/messages` | Envía un mensaje del usuario y devuelve el mensaje persistido (201). `content` de 1 a 4000 caracteres, se guarda sin espacios en los extremos. Acepta `Idempotency-Key`: un reintento con la misma clave en la misma conversación devuelve el mismo mensaje y **no** duplica el turno; sin clave, dos envíos iguales son dos turnos. Conversación inexistente → 404 `conversation_not_found`. |
@@ -80,8 +91,37 @@ data: {"error": {"code": "llm_unavailable", "message": "...", "details": {}, "re
 Al abrir el turno el mensaje del tutor se guarda con `content: ""` y `status: "streaming"`; `token`
 llega mientras se escribe, `message_end` llega **después** del commit que lo deja `sent`, y un corte o
 un fallo del proveedor lo deja `error` con el texto parcial, sin `message_end`: el `error` usa el sobre
-del punto 4 (`llm_unavailable` 502, `llm_timeout` 504). Los eventos `correction` y `vocabulary`
-(correcciones y términos sugeridos del mensaje del usuario) se agregan al cerrar el turno.
+del punto 4 (`llm_unavailable` 502, `llm_timeout` 504).
+
+Al cerrar el turno llegan, **después** de `message_end`, las correcciones y el vocabulario del mensaje
+del usuario que abrió el turno. **F3.**
+
+```text
+event: correction
+data: {"message_id": "<id del mensaje del USUARIO>",
+       "items": [{"original": "...", "corrected": "...", "explanation": "..."}]}
+
+event: vocabulary
+data: {"message_id": "<id del mensaje del USUARIO>",
+       "items": [{"term": "...", "translation": "...", "note": "..." | null}]}
+```
+
+- Ambos eventos llevan el `message_id` del mensaje del **usuario**, no el del tutor: son la
+devolución de lo que escribió el estudiante.
+- `correction` va antes que `vocabulary`. Si una lista quedó vacía, su evento no se emite; un turno
+sin nada que reportar cierra con `message_end` y nada más.
+- El cierre es una segunda invocación corta del proveedor: si falla o no devuelve algo parseable, el
+chat no se rompe. `message_end` ya se emitió, el mensaje del tutor queda `sent` y los eventos de
+feedback simplemente no llegan (el mensaje del usuario conserva `feedback: null`).
+- El vocabulario se guarda con el `language_id` de la conversación, no con el idioma activo global.
+- Un reintento del stream con el mismo `message_id` reemplaza el feedback de ese mensaje: no se
+duplica.
+
+### Feedback en el detalle
+
+`GET /conversations/{id}` adjunta `feedback` a cada mensaje del usuario de la página, con una sola
+consulta por página. Así las tarjetas del turno sobreviven a una recarga, porque el dato está en la
+base y no solo en el stream.
 
 ### Voz
 | Método | Ruta | Qué hace |

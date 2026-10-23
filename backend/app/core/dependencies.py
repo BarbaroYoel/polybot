@@ -64,4 +64,5 @@ async def get_tutor_service(
         llm=llm,
         # The stream outlives the request unit of work, so it commits as it goes (F3 S5).
         commit=session.commit,
+        rollback=session.rollback,
     )
