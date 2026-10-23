@@ -9,7 +9,7 @@ Prefijo: `/api/v1`. Formato: JSON UTF-8. Fechas: ISO 8601 UTC (`2026-10-22T14:03
 - Identificadores: UUID v4 como string.
 - Paginación por cursor: `?limit=20&cursor=<opaco>`; respuesta `{ "items": [...], "next_cursor": "..." | null }`.
 - Errores: siempre el sobre del punto 4, nunca HTML ni texto plano.
-- Códigos de error estables (el `code` no se traduce; el `message`, sí): `language_not_found`, `conversation_not_found`, `language_already_exists`, `active_language_cannot_be_archived`, `last_language_cannot_be_archived`, `invalid_cursor`, `validation_error`, `not_found`, `method_not_allowed`, `internal_error`. Un código nuevo se agrega acá en el mismo commit que lo introduce.
+- Códigos de error estables (el `code` no se traduce; el `message`, sí): `language_not_found`, `conversation_not_found`, `message_not_found`, `invalid_turn_message`, `language_already_exists`, `active_language_cannot_be_archived`, `last_language_cannot_be_archived`, `invalid_cursor`, `validation_error`, `not_found`, `method_not_allowed`, `llm_unavailable`, `llm_timeout`, `internal_error`. Un código nuevo se agrega acá en el mismo commit que lo introduce.
 - Operaciones de escritura aceptan `Idempotency-Key` (header) cuando el reintento duplicaría un turno.
 - Zona horaria: el cliente envía `tz` cuando el cálculo lo requiera (metas semanales); el servidor guarda UTC.
 
@@ -57,8 +57,31 @@ Prefijo: `/api/v1`. Formato: JSON UTF-8. Fechas: ISO 8601 UTC (`2026-10-22T14:03
 | GET | `/conversations/{id}?language_id=&messages_limit=&messages_cursor=` | Conversación con `messages: { items, next_cursor }`. `language_id` es opcional y sirve de guarda: si la conversación pertenece a otro idioma, responde 404 `conversation_not_found`. |
 | PATCH | `/conversations/{id}` | Renombra (`title`). |
 | DELETE | `/conversations/{id}` | Elimina con confirmación previa en la UI; borra sus mensajes. Responde 204. |
-| POST | `/conversations/{id}/messages` | Envía mensaje del usuario; devuelve el mensaje persistido. **F3.** |
-| GET | `/conversations/{id}/stream?message_id=` | SSE: `token`, `message_end`, `correction`, `error`. **F3.** |
+| POST | `/conversations/{id}/messages` | Envía un mensaje del usuario y devuelve el mensaje persistido (201). `content` de 1 a 4000 caracteres, se guarda sin espacios en los extremos. Acepta `Idempotency-Key`: un reintento con la misma clave en la misma conversación devuelve el mismo mensaje y **no** duplica el turno; sin clave, dos envíos iguales son dos turnos. Conversación inexistente → 404 `conversation_not_found`. |
+| GET | `/conversations/{id}/stream?message_id=` | SSE del turno del tutor (ver abajo). `message_id` es el mensaje del usuario que abre el turno: si no existe o es de otra conversación, 404 `message_not_found`; si no es del usuario, 400 `invalid_turn_message`; conversación inexistente, 404 `conversation_not_found`. **F3.** |
+
+#### El stream del turno
+
+`Content-Type: text/event-stream`, `Cache-Control: no-cache`, `X-Accel-Buffering: no`. Cada evento es
+`event: <nombre>` + `data: <json>` y termina en una línea en blanco. El servidor cierra el stream al
+terminar y, si el cliente corta, corta la llamada al proveedor y guarda lo ya emitido como `error`.
+
+```text
+event: token
+data: {"message_id": "<id del mensaje del tutor>", "delta": "Bonjour"}
+
+event: message_end
+data: { ...Message del tutor, ya persistido con status "sent"... }
+
+event: error
+data: {"error": {"code": "llm_unavailable", "message": "...", "details": {}, "request_id": "..."}}
+```
+
+Al abrir el turno el mensaje del tutor se guarda con `content: ""` y `status: "streaming"`; `token`
+llega mientras se escribe, `message_end` llega **después** del commit que lo deja `sent`, y un corte o
+un fallo del proveedor lo deja `error` con el texto parcial, sin `message_end`: el `error` usa el sobre
+del punto 4 (`llm_unavailable` 502, `llm_timeout` 504). Los eventos `correction` y `vocabulary`
+(correcciones y términos sugeridos del mensaje del usuario) se agregan al cerrar el turno.
 
 ### Voz
 | Método | Ruta | Qué hace |
@@ -108,5 +131,6 @@ El `code` es estable y no se traduce; el `message` sí.
 | Audio por request de síntesis | 2000 caracteres |
 | Mensajes por página | 50 |
 | Conversaciones por página | 20 (`limit` acepta 1–50) |
+| Contenido por mensaje | 4000 caracteres (`content` de 1 a 4000, sin espacios en los extremos) |
 | Timeout por proveedor | 30 s (LLM 60 s) |
 | Tokens de contexto por turno | A definir con el prompt del tutor |

@@ -10,6 +10,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.adapters.db.session import create_engine, create_session_factory
+from app.adapters.llm.pi import PiCliAdapter
 from app.api.v1.errors import install_domain_error_handler
 from app.api.v1.router import api_router
 from app.core.config import Settings
@@ -38,6 +39,12 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.state.settings = settings
     app.state.engine = create_engine(settings.database_url)
     app.state.session_factory = create_session_factory(app.state.engine)
+    # The tutor is a Pi instance per turn (F3 S1, ADR-013); `api/` only sees the port.
+    app.state.llm = PiCliAdapter(
+        command=[settings.pi_bin_path],
+        model=settings.pi_model_or_none,
+        timeout_seconds=settings.pi_timeout_seconds,
+    )
 
     app.add_middleware(RequestIdMiddleware)
     app.add_middleware(

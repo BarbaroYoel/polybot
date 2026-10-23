@@ -16,6 +16,8 @@ from app.adapters.db.conversations import (
 from app.adapters.db.languages import SqlAlchemyLanguageRepository
 from app.application.conversations import ConversationService
 from app.application.languages import LanguageService
+from app.application.tutor import TutorService
+from app.ports.llm import LlmPort
 
 
 async def get_session(request: Request) -> AsyncIterator[AsyncSession]:
@@ -43,4 +45,23 @@ async def get_conversation_service(
         conversations=SqlAlchemyConversationRepository(session),
         messages=SqlAlchemyMessageRepository(session),
         languages=SqlAlchemyLanguageRepository(session),
+    )
+
+
+def get_llm(request: Request) -> LlmPort:
+    """The tutor provider wired at startup (a Pi subprocess); tests override this dependency."""
+    return request.app.state.llm
+
+
+async def get_tutor_service(
+    session: AsyncSession = Depends(get_session),
+    llm: LlmPort = Depends(get_llm),
+) -> TutorService:
+    return TutorService(
+        conversations=SqlAlchemyConversationRepository(session),
+        messages=SqlAlchemyMessageRepository(session),
+        languages=SqlAlchemyLanguageRepository(session),
+        llm=llm,
+        # The stream outlives the request unit of work, so it commits as it goes (F3 S5).
+        commit=session.commit,
     )

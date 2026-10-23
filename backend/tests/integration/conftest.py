@@ -13,7 +13,9 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from app.adapters.db.seed import seed_example_data
 from app.adapters.db.session import create_engine, create_session_factory
 from app.core.config import Settings
+from app.core.dependencies import get_llm
 from app.main import create_app
+from tests.fakes.llm import FakeLlm
 
 BACKEND_ROOT = Path(__file__).resolve().parents[2]
 
@@ -44,10 +46,18 @@ def session_factory(database_url: str) -> Iterator[async_sessionmaker[AsyncSessi
 
 
 @pytest.fixture
+def fake_llm() -> FakeLlm:
+    """The `LlmPort` double the app uses: tests tune its deltas or make it fail."""
+    return FakeLlm()
+
+
+@pytest.fixture
 def api_client(
-    database_url: str, session_factory: async_sessionmaker[AsyncSession]
+    database_url: str,
+    session_factory: async_sessionmaker[AsyncSession],
+    fake_llm: FakeLlm,
 ) -> Iterator[TestClient]:
-    """A client whose app talks to the seeded temporary database."""
+    """A client whose app talks to the seeded temporary database and a fake tutor."""
 
     async def seed() -> None:
         async with session_factory() as session:
@@ -55,5 +65,8 @@ def api_client(
             await session.commit()
 
     asyncio.run(seed())
-    with TestClient(create_app(Settings(database_url=database_url))) as test_client:
+    app = create_app(Settings(database_url=database_url))
+    # Production launches a Pi subprocess per turn; the suite never does (F3 S2).
+    app.dependency_overrides[get_llm] = lambda: fake_llm
+    with TestClient(app) as test_client:
         yield test_client
