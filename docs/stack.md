@@ -18,6 +18,8 @@ con una propuesta explícita. Un agente no promueve una propuesta a decisión po
 | Gestor de paquetes Python (2026-10-22) | **`uv`** | Python `>=3.12`; `backend/uv.lock` versionado. |
 | Autenticación (2026-10-22) | **Sin auth en v0** | API abierta en local; se decide antes de exponerla (ADR-012, cierra Q5). |
 | Testing backend (2026-10-22) | **pytest + httpx** | `backend/tests/{unit,integration}`; la API se prueba sobre una base migrada. |
+| Motor del tutor (2026-10-23) | **Una instancia de Pi por turno**, detrás del puerto `LLM` | `pi --print --mode json` con herramientas y contexto apagados; sin SDK ni claves propias (ADR-013). |
+| Streaming de texto (2026-10-23) | **SSE** para el chat; WebSocket solo para el intérprete | Eventos `token`, `message_end`, `correction`, `vocabulary`, `error` (ADR-013). |
 
 ## Pendiente (con propuesta, sin confirmar)
 
@@ -25,8 +27,6 @@ con una propuesta explícita. Un agente no promueve una propuesta a decisión po
 |---|---|---|---|
 | Audio → texto (STT) | Pendiente de validar | Modelo mencionado por el usuario como **"Cactus Whistle"**: hay que confirmar nombre exacto, si corre local o en servidor, streaming y cobertura de idiomas | Fase de voz. |
 | Base de datos de producción | Pendiente | PostgreSQL; la v0 usa SQLite (ADR-012) | Despliegue. |
-| Motor del tutor | Pendiente | Contrato propio `LLM` con un proveedor inicial; prompt del tutor versionado en el repo | Chat real. |
-| Streaming de texto | Pendiente | SSE para respuestas del tutor; WebSocket solo para intérprete | Chat real. |
 | Despliegue | Pendiente | Contenedor único (API + Piper) + estáticos de la PWA | Nada por ahora. |
 | Testing frontend | Pendiente | `vitest` + Testing Library; Playwright para flujos | Arranque del frontend. |
 | Gestor de paquetes JS | Decidido: `npm` | — | — |

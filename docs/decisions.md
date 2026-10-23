@@ -189,6 +189,34 @@ sin ORM (migraciones a cargo del equipo); token fijo desde el arranque (suma gua
 
 ---
 
+## ADR-013 — El tutor es una instancia de Pi detrás del puerto `LLM`
+
+**Estado:** aceptada · **Fecha:** 2026-10-23 · **Resuelve:** filas «Motor del tutor» y «Streaming de texto» de `docs/stack.md`
+
+**Contexto.** `docs/stack.md` tenía en **Pendiente** el motor del tutor y el transporte del streaming, y ambas bloqueaban el chat real de F3. Antes de escribir código el humano eligió que el tutor sea «una instancia de pi»: no se agregó un proveedor cloud, ni un SDK, ni una clave nueva.
+
+**Decisión.**
+
+1. El adaptador `LLM` lanza `pi --print --mode json` como subproceso por turno y lee el JSONL de Pi
+   (`message_update` con `text_delta`, `message_end` autoritativo, `agent_settled`).
+2. La invocación fija `--no-session`, `--no-tools`, `--no-builtin-tools`, `--no-context-files`,
+   `--no-extensions`, `--no-skills`, `--no-mcp`, un directorio de trabajo temporal y un timeout propio:
+   el tutor es texto, no un agente con acceso al repositorio.
+3. El prompt vive versionado en `backend/app/adapters/llm/prompts/` (`tutor.v1`, `feedback.v1`).
+4. El chat usa SSE: `POST /conversations/{id}/messages` y `GET /conversations/{id}/stream?message_id=`,
+   con eventos `token`, `message_end`, `correction`, `vocabulary` y `error`. WebSocket queda para el intérprete.
+
+**Consecuencias.**
+
+- Cambiar de proveedor o de harness es cambiar un adaptador: `application/` y la UI no se enteran (ADR-004).
+- El modelo lo resuelve el Pi instalado; `PI_MODEL` lo fija sin tocar código. La API sigue sin estado: el historial
+  viaja en cada turno y el subproceso corre con `--no-session` (`docs/architecture.md` §6).
+- Costo de seguridad declarado: el backend ejecuta un binario externo por turno. Se acota con el aislamiento de flags
+  y de cwd, y ese riesgo se verifica aparte antes de cerrar la fase.
+- La suite usa un doble determinista de `LLM`; el turno real contra Pi se verifica en la verificación de F3, no en CI.
+
+---
+
 ## Precedencia entre el documento y el wireframe
 
 Si el texto de `desing.md` y la imagen `grayscale_language_tutor_chat_ui.png` difieren: **manda el texto**.
