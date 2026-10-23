@@ -43,8 +43,36 @@ export interface Conversation {
 }
 
 /**
+ * One correction of the closing turn (F3 S7): what the student wrote, the fixed version and why.
+ */
+export interface Correction {
+  original: string;
+  corrected: string;
+  explanation: string;
+}
+
+/** One suggested term of the closing turn (F3 S7): the word, its translation and a short note. */
+export interface VocabularyItem {
+  term: string;
+  translation: string;
+  note: string | null;
+}
+
+/**
+ * Feedback the closing turn produced for one user message. `GET /conversations/{id}` returns it on
+ * every user message so the cards survive a reload (F3 S7).
+ */
+export interface MessageFeedback {
+  corrections: Correction[];
+  vocabulary: VocabularyItem[];
+}
+
+/**
  * Note: docs/api-contract.md §2 lists `audio_url` on messages, but the running API does not send
  * it (voice arrives in F4). The type follows the payload, not the field that does not exist yet.
+ *
+ * `feedback` is optional on purpose: the API adds it with the closing turn (F3 S7) and the client
+ * must keep working while a payload does not carry it yet.
  */
 export interface Message {
   id: string;
@@ -54,6 +82,25 @@ export interface Message {
   translation: string | null;
   status: MessageStatus;
   created_at: string;
+  feedback?: MessageFeedback | null;
+}
+
+/** Payload of the `token` event: one text delta of the tutor message (contract §3). */
+export interface TurnTokenEvent {
+  message_id: string;
+  delta: string;
+}
+
+/** Payload of the `correction` event: corrections of the user message that opened the turn. */
+export interface TurnCorrectionsEvent {
+  message_id: string;
+  items: Correction[];
+}
+
+/** Payload of the `vocabulary` event: suggested terms of the user message that opened the turn. */
+export interface TurnVocabularyEvent {
+  message_id: string;
+  items: VocabularyItem[];
 }
 
 export interface ConversationPage {

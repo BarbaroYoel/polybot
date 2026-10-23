@@ -113,6 +113,131 @@
   font-size: 11px;
 }
 
+.message__incomplete {
+  padding: 0 6px;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-pill);
+  font-size: 11px;
+}
+
+.message__bubble--pending {
+  display: inline-flex;
+  align-items: center;
+}
+
+.message__pending {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  color: var(--text-secondary);
+  font-size: var(--text-sm);
+}
+
+/* One soft dot built from the existing tokens: the state is visible without a second spinner. */
+.message__pending::after {
+  content: "";
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--accent-neutral);
+  animation: message-thinking 1200ms ease-in-out infinite;
+}
+
+@keyframes message-thinking {
+  0%,
+  100% {
+    opacity: 0.2;
+  }
+
+  50% {
+    opacity: 1;
+  }
+}
+
+.feedback {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  max-width: 100%;
+  text-align: left;
+}
+
+.feedback__card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  background: var(--bg-surface);
+}
+
+.feedback__title {
+  color: var(--text-secondary);
+  font-size: var(--text-xs);
+  font-weight: 600;
+}
+
+.feedback__list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.feedback__item {
+  font-size: var(--text-sm);
+}
+
+.feedback__change {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--space-2);
+}
+
+.feedback__original {
+  color: var(--text-secondary);
+}
+
+.feedback__corrected {
+  color: var(--text-primary);
+  font-weight: 500;
+}
+
+.feedback__term {
+  font-weight: 500;
+}
+
+.feedback__gloss {
+  color: var(--text-secondary);
+  font-weight: 400;
+}
+
+.feedback__note {
+  margin-top: 2px;
+  color: var(--text-secondary);
+  font-size: var(--text-xs);
+}
+
+.thread__error {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  background: var(--bg-surface);
+}
+
+.thread__error-text {
+  flex: 1;
+  min-width: 20ch;
+  color: var(--text-primary);
+  font-size: var(--text-sm);
+}
+
 .message__actions {
   display: flex;
   flex-wrap: wrap;
@@ -245,6 +370,24 @@
   color: var(--text-secondary);
 }
 
+.composer__stop {
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--control-height);
+  padding: 0 var(--space-3);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-pill);
+  background: var(--bg-app);
+  color: var(--text-primary);
+  font-size: var(--text-sm);
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.composer__stop:hover {
+  background: var(--bg-hover);
+}
+
 @media (max-width: 767px) {
   .chat__scroll {
     padding: var(--space-3) var(--space-4);
@@ -252,6 +395,17 @@
 
   .chat__composer-wrap {
     padding: var(--space-2) var(--space-3) var(--space-4);
+  }
+
+  /* The composer row needs the room: «Detener» only exists while the stream runs. */
+  .composer {
+    gap: var(--space-1);
+    padding: var(--space-1) var(--space-2);
+  }
+
+  .composer__stop {
+    padding: 0 var(--space-2);
+    font-size: var(--text-xs);
   }
 
   .chips {

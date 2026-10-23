@@ -6,11 +6,24 @@ interface ChatComposerProps {
   value: string;
   onChange: (value: string) => void;
   onSend: () => void;
+  /** Cuts the running turn; the partial reply stays visible (F3 S6, S9). */
+  onStop: () => void;
+  /** A turn is in flight (`sending` or `streaming`): the send action waits for it. */
+  busy: boolean;
+  /** The SSE stream is open: only then does «Detener» make sense. */
+  streaming: boolean;
 }
 
-export function ChatComposer({ value, onChange, onSend }: ChatComposerProps) {
+export function ChatComposer({
+  value,
+  onChange,
+  onSend,
+  onStop,
+  busy,
+  streaming,
+}: ChatComposerProps) {
   const inputRef = useRef<HTMLTextAreaElement>(null);
-  const canSend = value.trim().length > 0;
+  const canSend = value.trim().length > 0 && !busy;
 
   const submit = () => {
     if (!canSend) return;
@@ -19,6 +32,7 @@ export function ChatComposer({ value, onChange, onSend }: ChatComposerProps) {
   };
 
   const handleKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>) => {
+    // desing.md §6.1.2: Enter sends, Shift+Enter inserts a line break.
     if (event.key === "Enter" && !event.shiftKey) {
       event.preventDefault();
       submit();
@@ -70,6 +84,17 @@ export function ChatComposer({ value, onChange, onSend }: ChatComposerProps) {
       >
         <Icon name="mic" size={19} />
       </button>
+
+      {streaming && (
+        <button
+          type="button"
+          className="composer__stop"
+          onClick={onStop}
+          aria-label="Detener la respuesta"
+        >
+          Detener
+        </button>
+      )}
 
       <button
         type="button"
