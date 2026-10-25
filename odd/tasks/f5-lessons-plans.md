@@ -63,11 +63,11 @@ idioma de explicación del perfil del idioma.
 
 | ID | Specs | Ruta | Commit |
 |---|---|---|---|
-| T1 | S1, S6, S8 | Unidades, lecciones y ejercicios en el dominio + esquema + seed por idioma + `GET /lessons?language_id=` | sin commit |
-| T2 | S2, S7, S8 | `GET /lessons/{id}` + `POST /lessons/{id}/submit`: corrección determinista, intento persistido, comentario del tutor best-effort | sin commit |
-| T3 | S3, S4, S6 | Planes: dominio, esquema, `GET /plans?language_id=`, `POST /plans`, `PATCH /plans/{id}` con cronograma por semanas y estados derivados | sin commit |
-| T4 | S1, S2, S3, S5 | PWA: catálogo de lecciones, vista de lección con práctica y resultado, pantalla de plan con sesiones | sin commit |
-| T5 | todas | Checks de la fase, verificación en navegador contra la API real y documentación (contrato, roadmap, decisiones) | — |
+| T1 | S1, S6, S8 | Unidades, lecciones y ejercicios en el dominio + esquema + seed por idioma + `GET /lessons?language_id=` | `0ca0673` |
+| T2 | S2, S7, S8 | `GET /lessons/{id}` + `POST /lessons/{id}/submit`: corrección determinista, intento persistido, comentario del tutor best-effort | `0ca0673` (mismo commit que T1) |
+| T3 | S3, S4, S6 | Planes: dominio, esquema, `GET /plans?language_id=`, `POST /plans`, `PATCH /plans/{id}` con cronograma por semanas y estados derivados | en curso |
+| T4 | S1, S2, S3, S5 | PWA: catálogo de lecciones, vista de lección con práctica y resultado, pantalla de plan con sesiones | pendiente |
+| T5 | todas | Checks de la fase, verificación en navegador contra la API real y documentación (contrato, roadmap, decisiones) | pendiente |
 
 ## Log
 
@@ -89,3 +89,10 @@ completada, dejando explícito como pendiente el streaming por frases y el warm-
    producto ya hace bien y lo único que se corrige sin heurísticas.
 3. **Estado de cada sesión derivado de los intentos** (S5), sin endpoint extra: un botón que cambie
    estados a mano sería un botón decorativo.
+
+**L3 — T1 y T2 entraron en un solo commit, y el ADR-017 se escribió tarde.** Al cortar la historia
+(el árbol arrastraba F3.5, F4 y F5 sin commit) T1 y T2 resultaron inseparables sin inventar código
+intermedio: comparten migración, repositorio, servicio y archivo de tests, y el catálogo deriva su
+estado de los intentos que crea el submit. Se commitearon juntos en `0ca0673`; F3.5 y F4 quedaron en
+`636c0eb` y `5b647f6`. El ADR-017 estaba citado en tres lugares (S8, este log y
+`lesson_content.py`) y no existía en `docs/decisions.md`: se escribió en el mismo commit.
