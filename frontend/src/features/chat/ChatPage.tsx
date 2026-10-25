@@ -460,6 +460,7 @@ export function ChatPage() {
               onRetry={handleRetry}
               onTranslateMessage={handleTranslateMessage}
               onTranslateFragment={handleTranslateFragment}
+              languageCode={conversationLanguage?.code}
             />
           )}
         </div>
@@ -472,6 +473,7 @@ export function ChatPage() {
             onStop={handleStop}
             busy={activeTurn !== null}
             streaming={activeTurn?.status === "streaming"}
+            languageCode={conversationLanguage?.code}
           />
         </div>
       </div>

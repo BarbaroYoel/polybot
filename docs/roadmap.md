@@ -1,6 +1,7 @@
 # Roadmap — Polybot
 
-Cada fase termina con algo verificable por un humano. Estado actual: **F3.5 completada; siguiente: F4 (voz)**.
+Cada fase termina con algo verificable por un humano. Estado actual: **F4 (voz) completada; siguiente: F5
+(lecciones y planes de estudio)**.
 
 ## F0 — Base documental
 
@@ -73,13 +74,21 @@ Alcance, decisiones y evidencia: `odd/tasks/message-translation.md`. Decisión r
 **Verificación:** `uv run pytest` (123 passed), `ruff format --check`/`ruff check` limpios, `npm run typecheck` y
 `npm run build` verdes, más la traducción real contra el Pi local. Detalle en el documento de la feature.
 
-## F4 — Voz
+## F4 — Voz — **completada** (rama `feat/f3-real-text-chat`, sin commit propio)
 
-- STT (decidir el modelo: ver `docs/stack.md`).
-- TTS con Piper, streaming por frases y caché.
-- Estados visibles: escuchando, transcribiendo, pensando, reproduciendo. Edición del texto transcripto antes de enviar.
+Alcance, decisiones y evidencia: `odd/tasks/f4-voice.md`. Decisiones registradas: ADR-015 y ADR-016.
 
-**Verificación:** turno de voz completo con latencia medida y aceptable; texto siempre visible como alternativa.
+- [x] STT con **Whistle** (ADR-015): local por CPU, siete idiomas, vía `cactus-needle`; `POST /voice/transcribe`.
+- [x] TTS con **Piper por binario** y caché por contenido (ADR-016); «Escuchar» y «Más lento» en el chat.
+- [x] Estados visibles: escuchando, transcribiendo, pensando, reproduciendo. Texto transcripto editable antes de enviar.
+- [ ] **Pendiente explícito, no silencioso:** streaming de voz por frases (hoy un clip por mensaje) y
+      warm-up del motor al arrancar (el primer turno de un proceso paga ~2,6 s de carga del STT).
+
+**Verificación:** `uv run pytest` (177 passed), `ruff format --check` y `ruff check` limpios,
+`npm run typecheck` y `npm run build` verdes, y un turno de voz completo medido contra la API real:
+transcribir 2,81 s en frío / 0,19 s en caliente, turno del tutor 11,31 s con primer token a 4,23 s,
+síntesis 0,32 s y caché en 0,00 s. La voz nunca reemplaza al texto: el transcripto se edita en el compositor.
+Detalle en `odd/tasks/f4-voice.md` L7.
 
 ## F5 — Lecciones y planes de estudio
 

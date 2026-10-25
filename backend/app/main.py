@@ -11,6 +11,8 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.adapters.db.session import create_engine, create_session_factory
 from app.adapters.llm.pi import PiCliAdapter
+from app.adapters.stt.whistle import WhistleSttAdapter
+from app.adapters.tts.piper import PiperTtsAdapter
 from app.api.v1.errors import install_domain_error_handler
 from app.api.v1.router import api_router
 from app.core.config import Settings
@@ -44,6 +46,16 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         command=[settings.pi_bin_path],
         model=settings.pi_model_or_none,
         timeout_seconds=settings.pi_timeout_seconds,
+    )
+    # Whistle transcribes on this machine's CPU (F4 S1, ADR-015). The engine is imported and its
+    # model loaded on the first transcription, so building the app stays cheap.
+    app.state.stt = WhistleSttAdapter()
+    # Piper speaks from a local binary and voice (F4 S4, ADR-016); nothing leaves the machine.
+    app.state.tts = PiperTtsAdapter(
+        command=(settings.piper_bin_path,),
+        voices_dir=settings.piper_voices_path,
+        speech_dir=settings.piper_speech_path,
+        timeout_seconds=settings.piper_timeout_seconds,
     )
 
     app.add_middleware(RequestIdMiddleware)
