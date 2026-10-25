@@ -84,6 +84,9 @@ class MessageRepository(Protocol):
     ) -> Message:
         """Rewrite a streamed message once the turn closes; returns the stored row."""
 
+    async def set_translation(self, message_id: str, translation: str) -> Message:
+        """Store the translation of one message; asking twice never calls the provider twice."""
+
     async def list_messages_before(
         self, conversation_id: str, before: Message, *, limit: int
     ) -> list[Message]:

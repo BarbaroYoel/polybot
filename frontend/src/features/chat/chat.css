@@ -97,6 +97,26 @@
   font-size: var(--text-sm);
 }
 
+/* The fragment that was translated, so the panel is never mistaken for the whole message (S6). */
+.message__translation-source {
+  color: var(--text-secondary);
+  font-style: italic;
+}
+
+.message__translation-error {
+  color: var(--text-primary);
+}
+
+.message__retry {
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--text-primary);
+  font: inherit;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
 .message__meta {
   display: flex;
   align-items: center;
@@ -416,3 +436,80 @@
     max-width: 100%;
   }
 }
+
+/* Entrada por voz (F4 S5, S6): los estados viven arriba de la fila, así el compositor no se mueve. */
+.composer-stack {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  width: 100%;
+  max-width: var(--content-max);
+  margin: 0 auto;
+}
+
+.composer-stack .composer {
+  max-width: none;
+  margin: 0;
+}
+
+.composer__status {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: 20px;
+  padding: 0 var(--space-3);
+  color: var(--text-secondary);
+  font-size: var(--text-sm);
+}
+
+.composer__status-dot,
+.composer__recording-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--accent-neutral);
+  flex: none;
+}
+
+.composer__status-dot {
+  animation: composer-pulse 1.4s ease-in-out infinite;
+}
+
+@keyframes composer-pulse {
+  0%,
+  100% {
+    opacity: 0.3;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+.composer__tool--recording {
+  color: var(--text-primary);
+  background: var(--bg-user-message);
+}
+
+.composer__error {
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  background: var(--bg-surface);
+  color: var(--text-primary);
+  font-size: var(--text-sm);
+}
+
+.composer__link {
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--text-primary);
+  font: inherit;
+  font-size: var(--text-sm);
+  text-decoration: underline;
+  cursor: pointer;
+  align-self: center;
+  white-space: nowrap;
+}
+
+/* Reproducción de un mensaje (F4 S5): el estado se ve, no se adivina. */

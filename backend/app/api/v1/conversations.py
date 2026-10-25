@@ -21,6 +21,7 @@ from app.api.v1.schemas import (
     MessagePage,
 )
 from app.application.conversations import ConversationService
+from app.application.translation import TranslationService
 from app.application.tutor import (
     TurnCompleted,
     TurnError,
@@ -29,7 +30,11 @@ from app.application.tutor import (
     TurnToken,
     TutorService,
 )
-from app.core.dependencies import get_conversation_service, get_tutor_service
+from app.core.dependencies import (
+    get_conversation_service,
+    get_translation_service,
+    get_tutor_service,
+)
 from app.core.errors import error_body
 
 router = APIRouter(prefix="/conversations", tags=["conversations"])
@@ -127,6 +132,22 @@ async def send_message(
         conversation_id, content=payload.content, idempotency_key=idempotency_key
     )
     return MessageOut.from_entity(message)
+
+
+@router.post(
+    "/{conversation_id}/messages/{message_id}/translation",
+    response_model=MessageOut,
+    summary="Translate and store one message (ADR-014)",
+    responses={404: {"description": "`conversation_not_found` or `message_not_found`"}},
+)
+async def translate_message(
+    conversation_id: str,
+    message_id: str,
+    service: TranslationService = Depends(get_translation_service),
+) -> MessageOut:
+    """Translate the whole message and keep it: a second call reuses the stored translation."""
+    result = await service.translate_message(conversation_id=conversation_id, message_id=message_id)
+    return MessageOut.from_entity(result.message, result.feedback)
 
 
 @router.get(

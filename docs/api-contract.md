@@ -70,6 +70,7 @@ Prefijo: `/api/v1`. Formato: JSON UTF-8. Fechas: ISO 8601 UTC (`2026-10-22T14:03
 | DELETE | `/conversations/{id}` | Elimina con confirmación previa en la UI; borra sus mensajes. Responde 204. |
 | POST | `/conversations/{id}/messages` | Envía un mensaje del usuario y devuelve el mensaje persistido (201). `content` de 1 a 4000 caracteres, se guarda sin espacios en los extremos. Acepta `Idempotency-Key`: un reintento con la misma clave en la misma conversación devuelve el mismo mensaje y **no** duplica el turno; sin clave, dos envíos iguales son dos turnos. Conversación inexistente → 404 `conversation_not_found`. |
 | GET | `/conversations/{id}/stream?message_id=` | SSE del turno del tutor (ver abajo). `message_id` es el mensaje del usuario que abre el turno: si no existe o es de otra conversación, 404 `message_not_found`; si no es del usuario, 400 `invalid_turn_message`; conversación inexistente, 404 `conversation_not_found`. **F3.** |
+| POST | `/conversations/{id}/messages/{message_id}/translation` | Traduce y **guarda** la traducción del mensaje completo, y responde el mensaje (200, mismo `Message` que el detalle). Idempotente: si el mensaje ya tiene `translation`, la devuelve sin llamar al proveedor. Origen y destino salen del perfil del idioma de la conversación. Mensaje de otra conversación → 404 `message_not_found`; conversación inexistente → 404 `conversation_not_found`. Fallo del proveedor → 502 `llm_unavailable` o 504 `llm_timeout`. **ADR-014.** |
 
 #### El stream del turno
 
@@ -140,7 +141,7 @@ base y no solo en el stream.
 | GET | `/plans?language_id=` | Plan activo e hitos. |
 | POST | `/plans` | Crea plan (`goal`, `frequency`, `daily_minutes`). |
 | GET | `/progress?language_id=` | Resumen de progreso y errores frecuentes. |
-| POST | `/translate` | `{ "text", "source?", "target" }` → `{ "translation", "detected_source" }`. |
+| POST | `/translate` | Traducción **sin estado**: `{ "text", "source?", "target" }` → `{ "translation", "detected_source" }`. Es el camino del fragmento seleccionado: no guarda nada. `source` es el código del idioma de origen; sin `source`, el proveedor lo detecta y `detected_source` vuelve `null` (el servidor no inventa un código que no detectó). `text` de 1 a 4000 caracteres, recortado. Target inválido o texto vacío → 422 `validation_error`. **ADR-014.** |
 
 ## 4. Sobre de error
 
@@ -172,5 +173,6 @@ El `code` es estable y no se traduce; el `message` sí.
 | Mensajes por página | 50 |
 | Conversaciones por página | 20 (`limit` acepta 1–50) |
 | Contenido por mensaje | 4000 caracteres (`content` de 1 a 4000, sin espacios en los extremos) |
+| Texto por request de traducción | 4000 caracteres (`text` de 1 a 4000, sin espacios en los extremos) |
 | Timeout por proveedor | 30 s (LLM 60 s) |
 | Tokens de contexto por turno | A definir con el prompt del tutor |

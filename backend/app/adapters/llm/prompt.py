@@ -16,10 +16,16 @@ from dataclasses import dataclass
 from pathlib import Path
 from string import Template
 
-from app.ports.llm import TurnMessage, TutorContext, TutorTurn
+from app.ports.llm import (
+    TranslationRequest,
+    TurnMessage,
+    TutorContext,
+    TutorTurn,
+)
 
 PROMPT_VERSION = "tutor.v1"
 PROMPT_VERSION_FEEDBACK = "feedback.v1"
+PROMPT_VERSION_TRANSLATION = "translate.v1"
 
 _PROMPTS_DIR = Path(__file__).resolve().parent / "prompts"
 _NO_HISTORY = "(todavía no hay mensajes)"
@@ -101,3 +107,36 @@ class FeedbackPrompt:
             user_message=turn.user_message,
             tutor_reply=reply,
         )
+
+
+@dataclass(frozen=True, slots=True)
+class TranslationPrompt:
+    """The translation prompt: the direction in the system side, the text in the turn (ADR-014)."""
+
+    system: str
+    turn: str
+
+    @classmethod
+    def load(cls, version: str = PROMPT_VERSION_TRANSLATION) -> "TranslationPrompt":
+        if not version.startswith("translate."):
+            raise ValueError(f"unexpected prompt version: {version}")
+        suffix = version.removeprefix("translate.")
+        text = (_PROMPTS_DIR / f"translate.{suffix}.md").read_text(encoding="utf-8")
+        system, _, turn = text.partition(_TURN_MARKER)
+        if not turn.strip():
+            raise ValueError(f"{version} has no turn template after {_TURN_MARKER}")
+        return cls(system=f"{system.strip()}\n", turn=f"{turn.strip()}\n")
+
+    def render_system(self, request: TranslationRequest) -> str:
+        return Template(self.system).substitute(
+            source_language=_render_source(request.source_language),
+            target_language=request.target_language,
+        )
+
+    def render_turn(self, request: TranslationRequest) -> str:
+        return Template(self.turn).substitute(text=request.text)
+
+
+def _render_source(source_language: str | None) -> str:
+    """A missing source is the model's job to detect; it is never invented by the caller."""
+    return source_language or "no indicado: detectá del texto"

@@ -1,9 +1,30 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { Icon } from "../../components/Icon";
 import type { Correction, Message, VocabularyItem } from "../../lib/types";
 
 interface ChatMessageProps {
   message: Message;
+  /** Translates and stores the whole message; resolves the stored translation (S2). */
+  onTranslateMessage: (messageId: string) => Promise<string>;
+  /** Translates a selected fragment; nothing is stored (S1, S2). */
+  onTranslateFragment: (text: string) => Promise<string>;
+}
+
+/**
+ * The text selected inside `node`, trimmed, or `null` (S1).
+ *
+ * The selection has to start *and* end inside this bubble: a selection that crosses two messages
+ * would be translated as one text, which is neither what the button promises nor what the user
+ * picked.
+ */
+function selectionWithin(node: HTMLElement | null): string | null {
+  if (!node) return null;
+  const selection = window.getSelection();
+  if (!selection || selection.isCollapsed || selection.rangeCount === 0) return null;
+  const range = selection.getRangeAt(0);
+  if (!node.contains(range.startContainer) || !node.contains(range.endContainer)) return null;
+  const text = range.toString().trim();
+  return text.length > 0 ? text : null;
 }
 
 /** Cards of the closing turn (F3 S7, desing.md §6.1.2): corrections and suggested vocabulary. */
@@ -60,12 +81,85 @@ function FeedbackCards({
   );
 }
 
-export function ChatMessage({ message }: ChatMessageProps) {
+export function ChatMessage({
+  message,
+  onTranslateMessage,
+  onTranslateFragment,
+}: ChatMessageProps) {
+  const bubbleRef = useRef<HTMLDivElement>(null);
+  // The last selection made inside this bubble. A click on the button can collapse the selection
+  // before the handler runs, so the bubble remembers the last one it saw.
+  const selectedRef = useRef<string | null>(null);
   const [showTranslation, setShowTranslation] = useState(false);
+  // The stored translation of the whole message, or the fragment's while it is on screen (S2).
+  const [translation, setTranslation] = useState<string | null>(message.translation ?? null);
+  // Which fragment the panel is showing; `null` means the whole message.
+  const [fragment, setFragment] = useState<string | null>(null);
+  const [translationStatus, setTranslationStatus] = useState<"idle" | "loading" | "error">(
+    "idle",
+  );
   const isTutor = message.author === "tutor";
   const showActions = isTutor && !message.pending && message.content.length > 0;
   const corrections = message.corrections ?? [];
   const vocabulary = message.vocabulary ?? [];
+
+  async function translateFragment(text: string): Promise<void> {
+    setShowTranslation(true);
+    setTranslationStatus("loading");
+    try {
+      setTranslation(await onTranslateFragment(text));
+      setFragment(text);
+      setTranslationStatus("idle");
+    } catch {
+      setTranslationStatus("error");
+    }
+  }
+
+  async function translateWholeMessage(): Promise<void> {
+    setShowTranslation(true);
+    setTranslationStatus("loading");
+    try {
+      setTranslation(await onTranslateMessage(message.id));
+      setFragment(null);
+      setTranslationStatus("idle");
+    } catch {
+      setTranslationStatus("error");
+    }
+  }
+
+  /** Remember the selection of this bubble while it is being made (mouse or keyboard). */
+  function rememberSelection(): void {
+    const selected = selectionWithin(bubbleRef.current);
+    if (selected !== null) selectedRef.current = selected;
+  }
+
+  /**
+   * One button, three outcomes (S1, S6): a selection of this bubble always wins and translates only
+   * the fragment; without a selection it hides what is open, shows a stored translation, or
+   * translates the whole message.
+   */
+  function handleTranslate(): void {
+    if (translationStatus === "loading") return;
+
+    const selected = selectionWithin(bubbleRef.current) ?? selectedRef.current;
+    if (selected !== null) {
+      selectedRef.current = null;
+      void translateFragment(selected);
+      return;
+    }
+    if (showTranslation) {
+      setShowTranslation(false);
+      return;
+    }
+    // A stored translation is not asked for again; a fragment's is not the whole message's.
+    if (translation !== null && fragment === null) {
+      setShowTranslation(true);
+      return;
+    }
+    void translateWholeMessage();
+  }
+
+  const translationLabel = showTranslation ? "Ocultar traducción" : "Traducir";
 
   return (
     <div className={`message message--${message.author}`}>
@@ -76,7 +170,12 @@ export function ChatMessage({ message }: ChatMessageProps) {
       )}
 
       <div className="message__body">
-        <div className={`message__bubble${message.pending ? " message__bubble--pending" : ""}`}>
+        <div
+          className={`message__bubble${message.pending ? " message__bubble--pending" : ""}`}
+          ref={bubbleRef}
+          onMouseUp={rememberSelection}
+          onKeyUp={rememberSelection}
+        >
           {message.pending ? (
             // The state stays announced while the first token travels (desing.md §6.1.2).
             <p className="message__pending" aria-live="polite">
@@ -86,8 +185,31 @@ export function ChatMessage({ message }: ChatMessageProps) {
             <p className="message__text">{message.content}</p>
           )}
           {showTranslation && !message.pending && (
-            <p className="message__translation">
-              {message.translation ?? "Traducción no disponible para este mensaje."}
+            <p className="message__translation" aria-live="polite">
+              {translationStatus === "loading" && "Traduciendo…"}
+              {translationStatus === "error" && (
+                <span className="message__translation-error">
+                  No pudimos traducir.{" "}
+                  <button
+                    type="button"
+                    className="message__retry"
+                    onClick={() => {
+                      if (fragment !== null) void translateFragment(fragment);
+                      else void translateWholeMessage();
+                    }}
+                  >
+                    Reintentar
+                  </button>
+                </span>
+              )}
+              {translationStatus === "idle" && translation !== null && (
+                <>
+                  {fragment !== null && (
+                    <span className="message__translation-source">«{fragment}»{" "}</span>
+                  )}
+                  {translation}
+                </>
+              )}
             </p>
           )}
         </div>
@@ -114,11 +236,14 @@ export function ChatMessage({ message }: ChatMessageProps) {
             <button
               type="button"
               className="message__action"
-              onClick={() => setShowTranslation((value) => !value)}
+              onClick={handleTranslate}
+              // Keep the text selection alive while the click lands (S1).
+              onMouseDown={(event) => event.preventDefault()}
               aria-pressed={showTranslation}
+              disabled={translationStatus === "loading"}
             >
               <Icon name="translate" size={15} />
-              {showTranslation ? "Ocultar traducción" : "Traducir"}
+              {translationLabel}
             </button>
             <button
               type="button"

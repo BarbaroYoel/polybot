@@ -7,9 +7,17 @@ interface ChatThreadProps {
   onQuickAction: (label: string) => void;
   /** Retries a failed turn with the same idempotency key (F3 S9). */
   onRetry: (turnKey: string) => void;
+  onTranslateMessage: (messageId: string) => Promise<string>;
+  onTranslateFragment: (text: string) => Promise<string>;
 }
 
-export function ChatThread({ items, onQuickAction, onRetry }: ChatThreadProps) {
+export function ChatThread({
+  items,
+  onQuickAction,
+  onRetry,
+  onTranslateMessage,
+  onTranslateFragment,
+}: ChatThreadProps) {
   const last = items.length > 0 ? items[items.length - 1] : null;
   const lastMessage = last?.kind === "message" ? last.message : null;
   // Suggestions belong to a finished tutor answer (desing.md §6.1.2): not while it is thinking,
@@ -39,7 +47,11 @@ export function ChatThread({ items, onQuickAction, onRetry }: ChatThreadProps) {
 
         return (
           <li className="thread__item" key={item.message.id}>
-            <ChatMessage message={item.message} />
+            <ChatMessage
+              message={item.message}
+              onTranslateMessage={onTranslateMessage}
+              onTranslateFragment={onTranslateFragment}
+            />
 
             {index === items.length - 1 && showQuickActions && (
               <div className="chips" aria-label="Sugerencias rápidas">
