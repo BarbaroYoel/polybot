@@ -18,7 +18,10 @@ from app.application.conversations import ConversationService
 from app.application.languages import LanguageService
 from app.application.translation import TranslationService
 from app.application.tutor import TutorService
+from app.application.voice import VoiceService
 from app.ports.llm import LlmPort
+from app.ports.stt import SttPort
+from app.ports.tts import TtsPort
 
 
 async def get_session(request: Request) -> AsyncIterator[AsyncSession]:
@@ -52,6 +55,24 @@ async def get_conversation_service(
 def get_llm(request: Request) -> LlmPort:
     """The tutor provider wired at startup (a Pi subprocess); tests override this dependency."""
     return request.app.state.llm
+
+
+def get_stt(request: Request) -> SttPort:
+    """The speech-to-text engine wired at startup (Whistle, F4 S1); tests override this."""
+    return request.app.state.stt
+
+
+def get_tts(request: Request) -> TtsPort:
+    """The speech engine wired at startup (Piper, F4 S4); tests override this."""
+    return request.app.state.tts
+
+
+async def get_voice_service(
+    stt: SttPort = Depends(get_stt),
+    tts: TtsPort = Depends(get_tts),
+) -> VoiceService:
+    """Voice needs no database: the audio is transcribed or synthesized and dropped (S7)."""
+    return VoiceService(stt=stt, tts=tts)
 
 
 async def get_translation_service(

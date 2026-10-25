@@ -9,8 +9,10 @@ from fastapi.responses import JSONResponse
 from app.core.handlers import error_response
 from app.domain.errors import (
     ActiveLanguageCannotBeArchived,
+    AudioTooLong,
     ConversationNotFound,
     DomainError,
+    InvalidAudio,
     InvalidTurnMessage,
     LanguageAlreadyExists,
     LanguageNotFound,
@@ -18,6 +20,10 @@ from app.domain.errors import (
     LlmTimeout,
     LlmUnavailable,
     MessageNotFound,
+    SpeechNotFound,
+    SttUnavailable,
+    TtsUnavailable,
+    VoiceNotAvailable,
 )
 
 _DOMAIN_ERRORS: dict[type[DomainError], tuple[int, str, str]] = {
@@ -65,6 +71,36 @@ _DOMAIN_ERRORS: dict[type[DomainError], tuple[int, str, str]] = {
         409,
         "last_language_cannot_be_archived",
         "Necesitas al menos un idioma en tu lista.",
+    ),
+    InvalidAudio: (
+        400,
+        "invalid_audio",
+        "No pudimos leer ese audio. Graba de nuevo, cerca del micrófono.",
+    ),
+    AudioTooLong: (
+        413,
+        "audio_too_long",
+        "El audio supera los 120 segundos. Graba un mensaje más corto.",
+    ),
+    VoiceNotAvailable: (
+        400,
+        "voice_not_available",
+        "No hay una voz instalada para ese idioma. Revisá las voces y volvé a intentar.",
+    ),
+    SpeechNotFound: (
+        404,
+        "speech_not_found",
+        "Ese audio ya no está disponible. Volvé a generarlo.",
+    ),
+    TtsUnavailable: (
+        502,
+        "tts_unavailable",
+        "No pudimos generar el audio. Vuelve a intentar en unos segundos.",
+    ),
+    SttUnavailable: (
+        502,
+        "stt_unavailable",
+        "No pudimos transcribir el audio. Vuelve a intentar en unos segundos.",
     ),
 }
 

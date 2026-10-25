@@ -34,6 +34,13 @@ class Settings(BaseSettings):
     pi_model: str = ""
     pi_timeout_seconds: float = 60.0
 
+    # Speech synthesis: the Piper binary and its voices are files on this machine (ADR-016).
+    # An empty voices/speech directory means `data/piper-voices` and `data/speech` in the repo.
+    piper_bin_path: str = "piper"
+    piper_voices_dir: str = ""
+    piper_speech_dir: str = ""
+    piper_timeout_seconds: float = 30.0
+
     @field_validator("database_url")
     @classmethod
     def _empty_database_url_means_the_default(cls, value: str) -> str:
@@ -64,3 +71,25 @@ class Settings(BaseSettings):
     @cached_property
     def pi_model_or_none(self) -> str | None:
         return self.pi_model.strip() or None
+
+    @field_validator("piper_bin_path")
+    @classmethod
+    def _empty_piper_path_means_the_path_lookup(cls, value: str) -> str:
+        return value.strip() or "piper"
+
+    @field_validator("piper_timeout_seconds")
+    @classmethod
+    def _piper_timeout_must_be_positive(cls, value: float) -> float:
+        if value <= 0:
+            raise ValueError("PIPER_TIMEOUT_SECONDS must be greater than zero")
+        return value
+
+    @cached_property
+    def piper_voices_path(self) -> Path:
+        configured = self.piper_voices_dir.strip()
+        return Path(configured) if configured else REPOSITORY_ROOT / "data" / "piper-voices"
+
+    @cached_property
+    def piper_speech_path(self) -> Path:
+        configured = self.piper_speech_dir.strip()
+        return Path(configured) if configured else REPOSITORY_ROOT / "data" / "speech"

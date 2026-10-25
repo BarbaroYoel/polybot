@@ -9,7 +9,7 @@ Prefijo: `/api/v1`. Formato: JSON UTF-8. Fechas: ISO 8601 UTC (`2026-10-22T14:03
 - Identificadores: UUID v4 como string.
 - Paginación por cursor: `?limit=20&cursor=<opaco>`; respuesta `{ "items": [...], "next_cursor": "..." | null }`.
 - Errores: siempre el sobre del punto 4, nunca HTML ni texto plano.
-- Códigos de error estables (el `code` no se traduce; el `message`, sí): `language_not_found`, `conversation_not_found`, `message_not_found`, `invalid_turn_message`, `language_already_exists`, `active_language_cannot_be_archived`, `last_language_cannot_be_archived`, `invalid_cursor`, `validation_error`, `not_found`, `method_not_allowed`, `llm_unavailable`, `llm_timeout`, `internal_error`. Un código nuevo se agrega acá en el mismo commit que lo introduce.
+- Códigos de error estables (el `code` no se traduce; el `message`, sí): `language_not_found`, `conversation_not_found`, `message_not_found`, `invalid_turn_message`, `language_already_exists`, `active_language_cannot_be_archived`, `last_language_cannot_be_archived`, `invalid_cursor`, `validation_error`, `not_found`, `method_not_allowed`, `llm_unavailable`, `llm_timeout`, `invalid_audio`, `audio_too_long`, `stt_unavailable`, `internal_error`. Un código nuevo se agrega acá en el mismo commit que lo introduce.
 - Operaciones de escritura aceptan `Idempotency-Key` (header) cuando el reintento duplicaría un turno.
 - Zona horaria: el cliente envía `tz` cuando el cálculo lo requiera (metas semanales); el servidor guarda UTC.
 
@@ -127,10 +127,39 @@ base y no solo en el stream.
 ### Voz
 | Método | Ruta | Qué hace |
 |---|---|---|
-| POST | `/voice/transcribe` | `multipart/form-data` (`audio`, `language_code?`). Devuelve `{ "text", "language_detected", "duration_ms" }`. |
-| POST | `/voice/speech` | `{ "text", "language_code", "voice?", "speed?": 1.0 }` → `audio/mpeg` o `audio/wav`. |
-| GET | `/voice/speech/{id}` | Descarga audio ya sintetizado (cache). |
+| POST | `/voice/transcribe` | `multipart/form-data` (`audio`, `language_code?`). Devuelve `{ "text", "language_detected", "duration_ms" }`. **F4.** Detalle abajo. |
+| POST | `/voice/speech` | Sintetiza y **cachea por contenido**: `{ "text", "language_code", "voice?", "speed?": 1.0 }` → `200 audio/wav` con la cabecera `X-Speech-Id` (sha256 de voz, velocidad y texto). Repetir la misma petición devuelve el mismo id sin volver a sintetizar. Texto de 1 a 2000 caracteres; `speed` de 0,5 a 2,0 → fuera de rango, 422 `validation_error`. Idioma sin voz instalada o voz inexistente → 400 `voice_not_available`; motor caído o sin binario → 502 `tts_unavailable`. **F4, ADR-016.** |
+| GET | `/voice/speech/{id}` | Devuelve el WAV cacheado de ese id (`audio/wav`), o 404 `speech_not_found` si ya no está. |
 | WS | `/voice/interpret` | Intérprete: envía segmentos de audio, recibe `transcript` y `translation` por turno. |
+
+#### La transcripción
+
+- `audio` es un WAV de **16 kHz, mono, 16 bits**, que es lo que graba el navegador. Otro sample
+  rate, más de un canal u otro ancho de muestra → 400 `invalid_audio`: el servidor no remuestrea.
+  Un archivo corrupto o que no es un WAV también es 400 `invalid_audio`; un `audio` vacío o
+  ausente es 422 `validation_error`.
+- `language_code` es opcional. Sin él el motor detecta el idioma; con él la transcripción se fuerza
+  a ese idioma (`fr`, también `fr-FR`: se usa el subtag principal). En ambos casos
+  `language_detected` es el idioma que informó el motor, o `null` si no lo informó: el servidor no
+  inventa un código.
+- `duration_ms` sale de los frames del WAV: es la duración del clip, no la del request.
+- Un clip **sin voz** devuelve `text: ""` con 200. Es una respuesta válida, no un error: la UI
+  tiene que poder decir que no se escuchó nada en vez de inventar una frase.
+- Más de **120 s** → 413 `audio_too_long`. Motor caído, error del motor o respuesta ilegible → 502
+  `stt_unavailable`. El motor corre en el backend y **el audio no sale de la máquina**.
+- El audio **no se guarda** ni temporalmente: se transcribe y se descarta con el request (F4 S7).
+
+#### La síntesis
+
+- La salida es **WAV mono 16 bits a 22,05 kHz**, el formato nativo de las voces de Piper. El
+  navegador reproduce cualquier sample rate, así que no se remuestrea.
+- `voice` es opcional: sin él se usa la voz por defecto del idioma. Un idioma sin voz instalada es
+  400 `voice_not_available` con un mensaje accionable, no un fallo del motor.
+- El **caché es por contenido** y vive en el servidor: `GET /voice/speech/{id}` sirve lo ya
+  sintetizado. Lo único que se guarda es el audio generado a partir de un texto, nunca una
+  grabación del usuario.
+- `speed` se traduce a la escala de longitud de Piper (`1 / speed`), así que 0,5 es la mitad de
+  rápido.
 
 ### Aprendizaje
 | Método | Ruta | Qué hace |
@@ -152,7 +181,7 @@ base y no solo en el stream.
 
 | HTTP | Cuándo |
 |---|---|
-| 400 | Entrada inválida o audio vacío/corrupto. |
+| 400 | Entrada inválida, audio corrupto o formato de audio no soportado. |
 | 401 / 403 | Falta autorización o permiso (cuando exista auth). |
 | 404 | Recurso inexistente o ajeno al idioma activo. |
 | 409 | Conflicto de estado (p. ej. activar idioma archivado). |
@@ -169,10 +198,13 @@ El `code` es estable y no se traduce; el `message` sí.
 | Límite | Valor inicial |
 |---|---|
 | Audio por request de transcripción | 120 s |
+| Formato del audio de transcripción | WAV 16 kHz, mono, 16 bits (sin remuestreo del lado del servidor) |
 | Audio por request de síntesis | 2000 caracteres |
 | Mensajes por página | 50 |
 | Conversaciones por página | 20 (`limit` acepta 1–50) |
 | Contenido por mensaje | 4000 caracteres (`content` de 1 a 4000, sin espacios en los extremos) |
 | Texto por request de traducción | 4000 caracteres (`text` de 1 a 4000, sin espacios en los extremos) |
+| Texto por request de síntesis | 2000 caracteres (`text` de 1 a 2000, sin espacios en los extremos) |
+| Velocidad de reproducción | 0,5 a 2,0 (`speed`, 1,0 por defecto) |
 | Timeout por proveedor | 30 s (LLM 60 s) |
 | Tokens de contexto por turno | A definir con el prompt del tutor |

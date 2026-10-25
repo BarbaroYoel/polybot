@@ -9,6 +9,8 @@ interface ChatThreadProps {
   onRetry: (turnKey: string) => void;
   onTranslateMessage: (messageId: string) => Promise<string>;
   onTranslateFragment: (text: string) => Promise<string>;
+  /** The conversation's language, so «Escuchar» uses the right voice (F4 S3). */
+  languageCode?: string;
 }
 
 export function ChatThread({
@@ -17,6 +19,7 @@ export function ChatThread({
   onRetry,
   onTranslateMessage,
   onTranslateFragment,
+  languageCode,
 }: ChatThreadProps) {
   const last = items.length > 0 ? items[items.length - 1] : null;
   const lastMessage = last?.kind === "message" ? last.message : null;
@@ -49,6 +52,7 @@ export function ChatThread({
           <li className="thread__item" key={item.message.id}>
             <ChatMessage
               message={item.message}
+              languageCode={languageCode}
               onTranslateMessage={onTranslateMessage}
               onTranslateFragment={onTranslateFragment}
             />

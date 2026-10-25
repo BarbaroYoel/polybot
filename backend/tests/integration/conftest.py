@@ -13,9 +13,11 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from app.adapters.db.seed import seed_example_data
 from app.adapters.db.session import create_engine, create_session_factory
 from app.core.config import Settings
-from app.core.dependencies import get_llm
+from app.core.dependencies import get_llm, get_stt, get_tts
 from app.main import create_app
 from tests.fakes.llm import FakeLlm
+from tests.fakes.stt import FakeStt
+from tests.fakes.tts import FakeTts
 
 BACKEND_ROOT = Path(__file__).resolve().parents[2]
 
@@ -52,10 +54,24 @@ def fake_llm() -> FakeLlm:
 
 
 @pytest.fixture
+def fake_stt() -> FakeStt:
+    """The `SttPort` double the app uses: no engine, no audio leaving the request."""
+    return FakeStt()
+
+
+@pytest.fixture
+def fake_tts() -> FakeTts:
+    """The `TtsPort` double the app uses: the suite never runs the Piper binary."""
+    return FakeTts()
+
+
+@pytest.fixture
 def api_client(
     database_url: str,
     session_factory: async_sessionmaker[AsyncSession],
     fake_llm: FakeLlm,
+    fake_stt: FakeStt,
+    fake_tts: FakeTts,
 ) -> Iterator[TestClient]:
     """A client whose app talks to the seeded temporary database and a fake tutor."""
 
@@ -68,5 +84,8 @@ def api_client(
     app = create_app(Settings(database_url=database_url))
     # Production launches a Pi subprocess per turn; the suite never does (F3 S2).
     app.dependency_overrides[get_llm] = lambda: fake_llm
+    app.dependency_overrides[get_tts] = lambda: fake_tts
+    # Production loads Whistle on this machine's CPU; the suite never does (F4 S1).
+    app.dependency_overrides[get_stt] = lambda: fake_stt
     with TestClient(app) as test_client:
         yield test_client

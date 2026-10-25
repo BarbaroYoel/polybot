@@ -251,6 +251,78 @@ en L2 eligió que el disparo sea el botón del mensaje, sin UI flotante.
 
 ---
 
+## ADR-015 — Whisper no: **Whistle** local como STT de F4
+
+**Estado:** aceptada · **Fecha:** 2026-10-23 · **Resuelve:** Q4 de `docs/open-questions.md` y la fila
+«Audio → texto (STT)» de `docs/stack.md`, que bloqueaban F4
+
+**Contexto.** F4 estaba bloqueada porque Q4 pedía el nombre exacto del modelo, si corre local o en
+servidor, si soporta streaming y qué idiomas cubre. El humano confirmó el modelo y su fuente:
+`https://huggingface.co/Cactus-Compute/whistle`.
+
+**Decisión.**
+
+1. STT = **Whistle** (Cactus Compute), en el backend, local y por CPU, a través del paquete `cactus-needle`
+   (existe en PyPI, 3.2.8, Python ≥ 3.9). Sin GPU, sin proveedor cloud y sin clave nueva. Verificado en
+   esta máquina: 0,41 s por 3 s de audio con el motor caliente, 8,7 s la primera llamada.
+2. El adaptador fija **`NEEDLE_TELEMETRY=0`** antes de importar el paquete: `cactus-needle` recolecta
+   conteos de uso anónimos (función, versión, SO) por defecto. No manda audio ni transcripciones, pero
+   «local» tiene que ser cierto también para el contador.
+3. Detrás de un puerto `STT` con adaptador reemplazable, igual que `LLM` (ADR-004): la UI habla con la API,
+   no con un modelo.
+4. Streaming nativo del motor (`needle_stream_transcribe_*`) para el intérprete; una pasada acotada para el
+   micrófono de una frase.
+5. Idiomas cubiertos por el modelo: inglés, alemán, francés, español, italiano, neerlandés y polaco. La
+   detección es automática salvo que se fuerce el idioma.
+
+**Consecuencias.**
+
+- El audio no sale de la máquina. Sigue sin prometerse conversación offline (ADR-006): el modelo corre en el
+  servidor, no en el navegador.
+- Los siete idiomas acotan qué se puede practicar con voz en v0; un idioma fuera de esa lista necesita otro
+  adaptador antes de prometer voz.
+- `cactus-needle` es una dependencia nueva de `backend/` y entra por esta decisión, no por iniciativa de un
+  agente. La primera tarea de F4 es verificarla de verdad en esta máquina: instalar, transcribir un clip
+  real y medir latencia. Si no corre acá, la decisión vuelve al humano con la evidencia.
+
+---
+
+## ADR-016 — Piper por binario y subproceso, no por el paquete de Python
+
+**Estado:** aceptada · **Fecha:** 2026-10-23 · **Ajusta:** la parte de implementación de ADR-003
+
+**Contexto.** ADR-003 decidió Piper como TTS local. La implementación natural era el paquete
+`piper-tts` de PyPI, pero arrastra `onnxruntime`, `numpy` y seis dependencias transitivas (~45 MB), y
+la descarga desde `files.pythonhosted.org` se corta desde esta máquina. El binario oficial de Piper
+(`piper_linux_x86_64.tar.gz`, 26,5 MB) trae `libonnxruntime` y `libespeak-ng` adentro.
+
+**Decisión.**
+
+1. Piper se usa como **binario por subproceso**, igual que Pi para el tutor (ADR-013): el adaptador
+   lanza `piper --model <voz.onnx> --output_file <wav> --length_scale <escala>` y le pasa el texto
+   por `stdin`.
+2. El binario y las voces viven fuera del repositorio, en `data/` (ignorado): `data/piper-bin/` y
+   `data/piper-voices/`. Las rutas son configuración (`PIPER_BIN_PATH`, `PIPER_VOICES_DIR`,
+   `PIPER_SPEECH_DIR`).
+3. Cada idioma tiene una voz por defecto por nombre de archivo; una voz que falta es
+   `voice_not_available` (400), no un fallo del motor.
+4. La síntesis es **síncrona y cacheada por contenido** (`sha256(texto|voz|velocidad)`): la segunda
+   petición del mismo texto no vuelve a sintetizar y `GET /voice/speech/{id}` la sirve del disco.
+5. La salida es WAV mono 16 bits a 22,05 kHz, el formato nativo del modelo.
+
+**Consecuencias.**
+
+- No se agrega ninguna dependencia Python para el TTS: el backend sigue con `cactus-needle` y
+  `python-multipart`.
+- Verificado en esta máquina: 1,9 s de audio en 0,31 s de reloj (RTF ≈ 0,05), español y francés, con
+  las voces `es_ES-davefx-medium` y `fr_FR-siwis-medium`.
+- Las voces por defecto son las `high` cuando existen (`de_DE-thorsten-high`, `en_US-lessac-high`,
+  `es_MX-claude-high`); cuestan ~6× más inferencia que las `medium` en alemán e inglés y siguen muy
+  por debajo del tiempo real. El francés no tiene `high` y queda en `medium`.
+- La instalación del binario es un paso documentado, no automático: sin él, el endpoint responde
+  `tts_unavailable` con un mensaje accionable y el resto de la app funciona igual.
+- El "streaming por frases" de ADR-003 queda como un proceso por frase, encadenado en el adaptador.
+
 ## Precedencia entre el documento y el wireframe
 
 Si el texto de `desing.md` y la imagen `grayscale_language_tutor_chat_ui.png` difieren: **manda el texto**.

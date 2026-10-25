@@ -1,9 +1,12 @@
 import { useRef, useState } from "react";
 import { Icon } from "../../components/Icon";
 import type { Correction, Message, VocabularyItem } from "../../lib/types";
+import { useSpeech } from "./useSpeech";
 
 interface ChatMessageProps {
   message: Message;
+  /** The conversation's language: the voice of «Escuchar» comes from it (F4 S3). */
+  languageCode?: string;
   /** Translates and stores the whole message; resolves the stored translation (S2). */
   onTranslateMessage: (messageId: string) => Promise<string>;
   /** Translates a selected fragment; nothing is stored (S1, S2). */
@@ -83,6 +86,7 @@ function FeedbackCards({
 
 export function ChatMessage({
   message,
+  languageCode,
   onTranslateMessage,
   onTranslateFragment,
 }: ChatMessageProps) {
@@ -102,6 +106,7 @@ export function ChatMessage({
   const showActions = isTutor && !message.pending && message.content.length > 0;
   const corrections = message.corrections ?? [];
   const vocabulary = message.vocabulary ?? [];
+  const speech = useSpeech({ text: message.content, languageCode });
 
   async function translateFragment(text: string): Promise<void> {
     setShowTranslation(true);
@@ -218,7 +223,30 @@ export function ChatMessage({
           {message.timeLabel && <time className="message__time">{message.timeLabel}</time>}
           {message.hasAudio && isTutor && <span className="message__audio-tag">Audio de ejemplo</span>}
           {message.incomplete && <span className="message__incomplete">Respuesta interrumpida</span>}
+          {speech.status === "loading" && (
+            <span className="message__speech" aria-live="polite">
+              Preparando el audio…
+            </span>
+          )}
+          {speech.status === "playing" && (
+            <span className="message__speech" aria-live="polite">
+              Reproduciendo…
+            </span>
+          )}
         </div>
+
+        {speech.error && (
+          <p className="message__speech-error" role="alert">
+            {speech.error}{" "}
+            <button
+              type="button"
+              className="message__retry"
+              onClick={() => void speech.play(1)}
+            >
+              Reintentar
+            </button>
+          </p>
+        )}
 
         {!isTutor && <FeedbackCards corrections={corrections} vocabulary={vocabulary} />}
 
@@ -227,11 +255,13 @@ export function ChatMessage({
             <button
               type="button"
               className="message__action"
-              disabled
-              title="Escuchar en voz alta llega en F4 con Piper"
+              onClick={() => void speech.play(1)}
+              disabled={speech.status === "loading"}
+              aria-pressed={speech.status === "playing"}
+              title={speech.status === "playing" ? "Detener la reproducción" : "Escuchar el mensaje"}
             >
               <Icon name="volume" size={15} />
-              Escuchar
+              {speech.status === "playing" ? "Detener" : "Escuchar"}
             </button>
             <button
               type="button"
@@ -256,8 +286,9 @@ export function ChatMessage({
             <button
               type="button"
               className="message__action"
-              disabled
-              title="La reproducción lenta llega con el audio (F4)"
+              onClick={() => void speech.play(0.75)}
+              disabled={speech.status === "loading"}
+              title="Escuchar el mensaje más despacio"
             >
               Más lento
             </button>

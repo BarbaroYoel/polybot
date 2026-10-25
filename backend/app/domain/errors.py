@@ -43,3 +43,27 @@ class LlmUnavailable(DomainError):
 
 class LlmTimeout(DomainError):
     """The tutor did not answer within the configured time (F3)."""
+
+
+class InvalidAudio(DomainError):
+    """The upload is empty, is not a WAV, or is not the shape the engine takes (F4 S3)."""
+
+
+class AudioTooLong(DomainError):
+    """The clip is longer than the transcription limit (F4 S3)."""
+
+
+class SttUnavailable(DomainError):
+    """The speech-to-text engine failed or answered something unusable (F4 S3)."""
+
+
+class VoiceNotAvailable(DomainError):
+    """No voice speaks that language, or the requested voice is not installed (F4, ADR-016)."""
+
+
+class TtsUnavailable(DomainError):
+    """The speech engine failed, timed out or is not installed (F4, ADR-016)."""
+
+
+class SpeechNotFound(DomainError):
+    """The synthesized clip is not in the cache: it has to be generated again (F4)."""

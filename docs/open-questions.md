@@ -31,8 +31,10 @@ El orden relativo se mantiene (usuario más oscuro que tutor), pero los valores 
 
 ## Q4 — Motor STT: confirmar "Cactus Whistle"
 
-El usuario lo mencionó como modelo de audio a texto. Falta el nombre exacto, si corre local o en servidor,
-si soporta streaming y qué idiomas cubre. Bloquea F4, no F1.
+**Estado: RESUELTA → ADR-015.** Es **Whistle** de Cactus Compute (`huggingface.co/Cactus-Compute/whistle`):
+corre local por CPU, soporta streaming nativo y cubre inglés, alemán, francés, español, italiano, neerlandés y
+polaco. El vehículo es el paquete `cactus-needle`. F4 puede empezar; su primera tarea es verificarlo en esta
+máquina con un clip real.
 
 ## Q5 — ¿La PWA necesita autenticación en v0?
 

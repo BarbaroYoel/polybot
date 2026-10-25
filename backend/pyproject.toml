@@ -7,8 +7,10 @@ requires-python = ">=3.12"
 dependencies = [
     "aiosqlite>=0.22.1",
     "alembic>=1.14",
+    "cactus-needle>=3.2.8",
     "fastapi>=0.115",
     "pydantic-settings>=2.6",
+    "python-multipart>=0.0.32",
     "sqlalchemy[asyncio]>=2.0.43",
     "uvicorn[standard]>=0.32",
 ]

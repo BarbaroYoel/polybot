@@ -8,7 +8,7 @@ con una propuesta explícita. Un agente no promueve una propuesta a decisión po
 | Área | Decisión | Notas |
 |---|---|---|
 | Backend | **FastAPI** (Python) | Prioridad: escalabilidad y API tipada con OpenAPI. |
-| Texto → audio (TTS) | **Piper** | Voces por idioma; síntesis local; streaming por frases. |
+| Texto → audio (TTS) | **Piper**, por **binario y subproceso** (2026-10-23) | Voces por idioma en `data/piper-voices`; síntesis local con caché por contenido; sin dependencias Python (ADR-016). |
 | Producto | PWA de tutor de idiomas centrada en el chat | Ver `desing.md`. |
 | Frontend | **React 18 + Vite + TypeScript**, CSS propio sobre los tokens de `desing.md` §3, `react-router-dom` | Sin librería de UI ni framework de CSS. |
 | UI | Español, monocromática minimalista | Wireframe en grises; marca definitiva fuera de alcance. |
@@ -21,12 +21,12 @@ con una propuesta explícita. Un agente no promueve una propuesta a decisión po
 | Motor del tutor (2026-10-23) | **Una instancia de Pi por turno**, detrás del puerto `LLM` | `pi --print --mode json` con herramientas y contexto apagados; sin SDK ni claves propias (ADR-013). |
 | Streaming de texto (2026-10-23) | **SSE** para el chat; WebSocket solo para el intérprete | Eventos `token`, `message_end`, `correction`, `vocabulary`, `error` (ADR-013). |
 | Traducción de mensajes y fragmentos (2026-10-23) | Un turno corto del mismo puerto `LLM` (`translate.v1`) | Solo el mensaje completo se persiste; el fragmento es efímero (ADR-014). |
+| Audio → texto (STT) (2026-10-23) | **Whistle** (Cactus Compute), local en el backend vía `cactus-needle` | CPU, streaming, 7 idiomas; detrás de un puerto `STT` (ADR-015). |
 
 ## Pendiente (con propuesta, sin confirmar)
 
 | Área | Estado | Propuesta | Qué bloquea |
 |---|---|---|---|
-| Audio → texto (STT) | Pendiente de validar | Modelo mencionado por el usuario como **"Cactus Whistle"**: hay que confirmar nombre exacto, si corre local o en servidor, streaming y cobertura de idiomas | Fase de voz. |
 | Base de datos de producción | Pendiente | PostgreSQL; la v0 usa SQLite (ADR-012) | Despliegue. |
 | Despliegue | Pendiente | Contenedor único (API + Piper) + estáticos de la PWA | Nada por ahora. |
 | Testing frontend | Pendiente | `vitest` + Testing Library; Playwright para flujos | Arranque del frontend. |
