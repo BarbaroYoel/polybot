@@ -22,6 +22,8 @@ from app.domain.errors import (
     LlmUnavailable,
     MessageNotFound,
     MissingLessonAnswers,
+    PlanAlreadyExists,
+    PlanNotFound,
     SpeechNotFound,
     SttUnavailable,
     TtsUnavailable,
@@ -68,6 +70,16 @@ _DOMAIN_ERRORS: dict[type[DomainError], tuple[int, str, str]] = {
         422,
         "missing_lesson_answers",
         "Respondé todos los ejercicios de la lección antes de terminarla.",
+    ),
+    PlanNotFound: (
+        404,
+        "plan_not_found",
+        "Ese plan no existe. Volvé a la pantalla del plan y creá uno nuevo.",
+    ),
+    PlanAlreadyExists: (
+        409,
+        "plan_already_exists",
+        "Ya tenés un plan para ese idioma. Ajustá el actual en vez de crear otro.",
     ),
     LanguageAlreadyExists: (
         409,

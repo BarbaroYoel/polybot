@@ -253,3 +253,44 @@ class LessonAttemptAnswerRow(Base):
     correct: Mapped[bool] = mapped_column(Boolean, nullable=False)
 
     __table_args__ = (Index("ix_lesson_attempt_answers_attempt", "attempt_id"),)
+
+
+class StudyPlanRow(Base):
+    """The plan the user asked for one language (F5 S3). One plan per language, never two."""
+
+    __tablename__ = "study_plans"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    # Unique as well: the service answers 409 `plan_already_exists` before the database sees a
+    # second plan, and the constraint keeps that true even if two requests race.
+    language_id: Mapped[str] = mapped_column(
+        String(36),
+        ForeignKey("languages.id", ondelete="CASCADE"),
+        nullable=False,
+        unique=True,
+    )
+    # Fixed at creation: the goal is what the user asked for (F5 S4).
+    goal: Mapped[str] = mapped_column(String(200), nullable=False)
+    frequency: Mapped[int] = mapped_column(Integer, nullable=False)
+    daily_minutes: Mapped[int] = mapped_column(Integer, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+    # Null until the user adjusts the plan: nothing recalculates it by itself (S4).
+    adjusted_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+
+
+class PlanSessionRow(Base):
+    """One lesson placed in a week of the schedule. Its state is derived, never stored (F5 S5)."""
+
+    __tablename__ = "plan_sessions"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    plan_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("study_plans.id", ondelete="CASCADE"), nullable=False
+    )
+    lesson_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("lessons.id", ondelete="CASCADE"), nullable=False
+    )
+    week: Mapped[int] = mapped_column(Integer, nullable=False)
+    position: Mapped[int] = mapped_column(Integer, nullable=False)
+
+    __table_args__ = (Index("ix_plan_sessions_plan_week_position", "plan_id", "week", "position"),)

@@ -18,9 +18,11 @@ from app.adapters.db.lessons import (
     SqlAlchemyLessonAttemptRepository,
     SqlAlchemyLessonRepository,
 )
+from app.adapters.db.plans import SqlAlchemyStudyPlanRepository
 from app.application.conversations import ConversationService
 from app.application.languages import LanguageService
 from app.application.lessons import LessonService
+from app.application.plans import PlanService
 from app.application.translation import TranslationService
 from app.application.tutor import TutorService
 from app.application.voice import VoiceService
@@ -103,6 +105,17 @@ async def get_lesson_service(
         attempts=SqlAlchemyLessonAttemptRepository(session),
         languages=SqlAlchemyLanguageRepository(session),
         llm=llm,
+    )
+
+
+async def get_plan_service(
+    session: AsyncSession = Depends(get_session),
+) -> PlanService:
+    """Plans need no model: the schedule follows the catalog and the real attempts (F5 S3, S4)."""
+    return PlanService(
+        plans=SqlAlchemyStudyPlanRepository(session),
+        lessons=SqlAlchemyLessonRepository(session),
+        languages=SqlAlchemyLanguageRepository(session),
     )
 
 

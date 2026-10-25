@@ -79,3 +79,11 @@ class NoLessonsForLanguage(DomainError):
 
 class MissingLessonAnswers(DomainError):
     """A submit that does not answer every exercise of the lesson (F5 S7)."""
+
+
+class PlanNotFound(DomainError):
+    """The plan does not exist (F5 S3)."""
+
+
+class PlanAlreadyExists(DomainError):
+    """The language already has a plan: one per language, adjusted instead of duplicated (S4)."""
