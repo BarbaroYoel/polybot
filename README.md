@@ -1,24 +1,59 @@
 # Polybot
 
-PWA de tutor de idiomas guiada por IA, centrada en el chat, con voz como capacidad de primera clase.
+PWA de tutor de idiomas guiada por IA, centrada en el chat, con la voz como capacidad de primera
+clase. Un solo idioma activo a la vez; conversaciones, lecciones, planes y progreso aislados por
+idioma.
 
-**Estado:** F1 — carcasa de la PWA con datos de ejemplo. Sin backend todavía.
+**Estado:** F4 (voz) completada y F5 (lecciones y planes) en curso. La fuente de verdad del avance y
+de la evidencia de cada fase es [`docs/roadmap.md`](./docs/roadmap.md); el detalle tarea por tarea
+está en [`odd/tasks/`](./odd/tasks).
+
+Lo que ya funciona de punta a punta: la PWA lee idiomas y conversaciones de la API, conversa con el
+tutor en tiempo real por SSE, pide correcciones y vocabulario al cerrar cada turno, traduce un mensaje
+o un fragmento seleccionado, y transcribe y reproduce voz con motores locales.
+
+## Requisitos
+
+| Pieza | Para qué | Nota |
+|---|---|---|
+| Python 3.13 + [uv](https://docs.astral.sh/uv/) | backend | `uv sync` instala todo |
+| Node 20+ | frontend | solo el frontend |
+| [Pi](https://github.com/badlogic/pi) en el `PATH` | el tutor es una instancia de Pi por turno (ADR-013) | sin Pi: `llm_unavailable`, el resto de la app anda igual |
+| Piper (binario) + voces | audio de salida (ADR-016) | opcional: sin él, `/voice/speech` responde `tts_unavailable` |
+| `cactus-needle` | audio de entrada, modelo Whistle (ADR-015) | entra por `uv sync`; el modelo se baja con el primer uso |
 
 ## Cómo correrlo
+
+Backend (`http://localhost:8000`, la API vive en `/api/v1`):
+
+```bash
+cd backend
+uv sync
+uv run alembic upgrade head          # crea el esquema
+uv run python -m app.adapters.db.seed # datos de ejemplo: idiomas, conversaciones y lecciones
+uv run uvicorn app.main:app --reload
+```
+
+Frontend (`http://localhost:5173`):
 
 ```bash
 cd frontend
 npm install
-npm run dev      # http://localhost:5173
+npm run dev
 ```
+
+`VITE_API_BASE_URL` (en `frontend/.env`) cambia el destino de la API. La plantilla de variables del
+backend está en [`docs/env.example`](./docs/env.example).
+
+## Checks
 
 ```bash
-npm run typecheck   # TypeScript estricto
-npm run build       # typecheck + bundle de producción
+cd backend  && uv run pytest && uv run ruff format --check && uv run ruff check
+cd frontend && npm run typecheck && npm run build
 ```
 
-Los datos que se ven son de ejemplo y la interfaz lo dice: no hay API conectada.
-Los controles sin función están deshabilitados con un `title` que explica en qué fase llegan.
+La suite del backend corre sobre una base migrada por Alembic, sin red: el proveedor del tutor y los
+motores de voz se reemplazan por dobles. Los comandos válidos están en [`AGENTS.md`](./AGENTS.md) §5.
 
 ## Qué hay en este repositorio
 
@@ -28,21 +63,24 @@ Los controles sin función están deshabilitados con un `title` que explica en q
 | [`AGENTS.md`](./AGENTS.md) | Contrato de trabajo para agentes (Pi, OpenCode, Codex, Cursor…). Empezá por acá si sos un agente. |
 | [`docs/architecture.md`](./docs/architecture.md) | Capas, límites, mapa de carpetas y flujos. |
 | [`docs/stack.md`](./docs/stack.md) | Qué está decidido y qué falta decidir. |
-| [`docs/api-contract.md`](./docs/api-contract.md) | Contrato v0 entre frontend y backend. |
+| [`docs/api-contract.md`](./docs/api-contract.md) | Contrato entre frontend y backend. |
 | [`docs/conventions.md`](./docs/conventions.md) | Código, tests, commits, idioma de artefactos. |
-| [`docs/decisions.md`](./docs/decisions.md) | ADRs aceptadas. |
+| [`docs/decisions.md`](./docs/decisions.md) | ADRs aceptadas (ADR-001 a ADR-017). |
 | [`docs/open-questions.md`](./docs/open-questions.md) | Decisiones de producto/UI todavía abiertas. |
+| [`docs/roadmap.md`](./docs/roadmap.md) | Fases F0–F7, qué se verificó en cada una y qué falta. |
+| [`odd/tasks/`](./odd/tasks) | Una ficha por feature: specs, tareas, commits y evidencia. |
 | [`grayscale_language_tutor_chat_ui.png`](./grayscale_language_tutor_chat_ui.png) | Wireframe de referencia (1448×1086). |
-| [`docs/roadmap.md`](./docs/roadmap.md) | Fases F0–F7 y criterios de verificación. |
 
-## Stack definido
+## Stack
 
-Frontend **React 18 + Vite + TypeScript** (ADR-010) · backend **FastAPI** · TTS **Piper** · PWA independiente del harness · UI en español, estética monocromática.
-Pendiente: motor STT, base de datos, motor del tutor. Ver `docs/stack.md`.
+Frontend **React 18 + Vite + TypeScript**, CSS propio sobre los tokens de `desing.md` §3.
+Backend **FastAPI** con capas `domain → application → adapters`, **SQLite** por SQLAlchemy 2 + Alembic.
+Tutor: **una instancia de Pi por turno** detrás del puerto `LLM`. Voz: **Whistle** local (STT) y
+**Piper** por binario (TTS), detrás de los puertos `STT` y `TTS`. La UI no conoce ningún orquestador:
+solo habla con la API.
 
-## Cómo arrancar
-
-El frontend de F1 ya corre (ver arriba). Lo siguiente está en `docs/roadmap.md` (F2: esqueleto del backend).
+Las decisiones y sus motivos están en [`docs/decisions.md`](./docs/decisions.md); cada una dice qué
+alternativa se descartó y por qué.
 
 ## Skills del proyecto
 
@@ -51,4 +89,5 @@ El índice generado está en `.atl/skill-registry.md`.
 
 ## Licencia
 
-Sin definir.
+Sin definir: el repositorio es público para leerlo y revisarlo, pero todavía no hay una licencia que
+otorgue derechos de uso, copia o derivados.
