@@ -215,3 +215,58 @@ class LessonTerm:
     term: str
     translation: str
     note: str | None
+
+
+class PlanSessionState(StrEnum):
+    """State of one session of a plan, derived from that lesson's real attempts (F5 S3, S5).
+
+    The three values are the ones `desing.md` §6.3 shows («pendiente, en curso, completada») and
+    match `LessonStatus`: a session is only as advanced as the lesson it opens.
+    """
+
+    PENDING = "pending"
+    IN_PROGRESS = "in_progress"
+    COMPLETED = "completed"
+
+
+@dataclass(frozen=True, slots=True)
+class StudyPlan:
+    """The plan the user asked for one language (F5 S3). The goal is fixed at creation (S4)."""
+
+    id: str
+    language_id: str
+    goal: str
+    frequency: int
+    daily_minutes: int
+    created_at: datetime
+    adjusted_at: datetime | None
+
+
+@dataclass(frozen=True, slots=True)
+class NewStudyPlan:
+    """A plan to create: what the user asked for, before its schedule is generated (S3)."""
+
+    language_id: str
+    goal: str
+    frequency: int
+    daily_minutes: int
+
+
+@dataclass(frozen=True, slots=True)
+class PlanSession:
+    """One session of a plan's schedule: a lesson placed in a week and a position (F5 S3)."""
+
+    id: str
+    plan_id: str
+    lesson_id: str
+    week: int
+    position: int
+
+
+@dataclass(frozen=True, slots=True)
+class NewPlanSession:
+    """One session to write when the schedule is generated or regenerated (F5 S4)."""
+
+    lesson_id: str
+    week: int
+    position: int

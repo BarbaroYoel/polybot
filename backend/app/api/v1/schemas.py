@@ -13,6 +13,7 @@ from app.application.lessons import (
     LessonResult,
 )
 from app.application.pagination import Page
+from app.application.plans import PlanSessionEntry, PlanView
 from app.core.dates import to_iso
 from app.domain.entities import (
     CefrLevel,
@@ -25,6 +26,7 @@ from app.domain.entities import (
     Message,
     MessageAuthor,
     MessageStatus,
+    PlanSessionState,
 )
 from app.domain.feedback import MessageFeedback
 from app.ports.llm import TurnFeedback
@@ -447,4 +449,93 @@ class LessonResultOut(BaseModel):
                 if result.next_lesson is not None
                 else None
             ),
+        )
+
+
+# Contract §3: the goal is what the user asked for, trimmed and bounded; it is not adjustable.
+PlanGoal = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=200)]
+
+
+class PlanCreateIn(BaseModel):
+    """What the user asks for when the plan is created (F5 S3)."""
+
+    language_id: str = Field(min_length=1)
+    goal: PlanGoal
+    # Sessions per week, and the minutes the user can give each day.
+    frequency: int = Field(ge=1, le=7)
+    daily_minutes: int = Field(ge=5, le=120)
+
+
+class PlanAdjustIn(BaseModel):
+    """The only two things the user can change: the goal stays as it was asked (F5 S4)."""
+
+    frequency: int | None = Field(default=None, ge=1, le=7)
+    daily_minutes: int | None = Field(default=None, ge=5, le=120)
+
+
+class PlanSessionOut(BaseModel):
+    """One session of the schedule, with the state its lesson's attempts give it (S5)."""
+
+    id: str
+    week: int
+    position: int
+    lesson_id: str
+    lesson_title: str
+    status: PlanSessionState
+
+    @classmethod
+    def from_entry(cls, entry: PlanSessionEntry) -> "PlanSessionOut":
+        return cls(
+            id=entry.session.id,
+            week=entry.session.week,
+            position=entry.session.position,
+            lesson_id=entry.session.lesson_id,
+            lesson_title=entry.lesson_title,
+            status=entry.status,
+        )
+
+
+class PlanOut(BaseModel):
+    id: str
+    language_id: str
+    goal: str
+    frequency: int
+    daily_minutes: int
+    weeks: int
+    created_at: str
+    adjusted_at: str | None
+    next_session: PlanSessionOut | None
+    sessions: list[PlanSessionOut]
+
+    @classmethod
+    def from_entity(cls, view: PlanView) -> "PlanOut":
+        return cls(
+            id=view.plan.id,
+            language_id=view.plan.language_id,
+            goal=view.plan.goal,
+            frequency=view.plan.frequency,
+            daily_minutes=view.plan.daily_minutes,
+            weeks=view.weeks,
+            created_at=to_iso(view.plan.created_at),
+            adjusted_at=to_iso(view.plan.adjusted_at) if view.plan.adjusted_at else None,
+            next_session=(
+                PlanSessionOut.from_entry(view.next_session)
+                if view.next_session is not None
+                else None
+            ),
+            sessions=[PlanSessionOut.from_entry(entry) for entry in view.sessions],
+        )
+
+
+class LanguagePlanOut(BaseModel):
+    """`GET /plans?language_id=`: the plan of one language, or `null` when it has none."""
+
+    language_id: str
+    plan: PlanOut | None
+
+    @classmethod
+    def from_entity(cls, language_id: str, view: PlanView | None) -> "LanguagePlanOut":
+        return cls(
+            language_id=language_id,
+            plan=PlanOut.from_entity(view) if view is not None else None,
         )

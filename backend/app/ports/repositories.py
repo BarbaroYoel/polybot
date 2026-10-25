@@ -20,6 +20,10 @@ from app.domain.entities import (
     NewConversation,
     NewLanguage,
     NewMessage,
+    NewPlanSession,
+    NewStudyPlan,
+    PlanSession,
+    StudyPlan,
     WeeklyGoal,
 )
 from app.domain.feedback import MessageFeedback
@@ -148,3 +152,33 @@ class LessonAttemptRepository(Protocol):
         feedback: str | None,
     ) -> LessonAttempt:
         """Store one finished practice with its answers, so F6 can read them later (S7)."""
+
+
+class StudyPlanRepository(Protocol):
+    """The plan of one language and the schedule that spreads its catalog (F5 S3, S4, S6)."""
+
+    async def get_plan(self, language_id: str) -> StudyPlan | None:
+        """The plan of one language, or `None` when that language has none yet."""
+
+    async def get_plan_by_id(self, plan_id: str) -> StudyPlan | None: ...
+
+    async def add_plan(self, draft: NewStudyPlan, schedule: Sequence[NewPlanSession]) -> StudyPlan:
+        """Store the plan and the schedule generated from the catalog, in one transaction."""
+
+    async def adjust_plan(
+        self,
+        plan_id: str,
+        *,
+        frequency: int,
+        daily_minutes: int,
+        schedule: Sequence[NewPlanSession],
+    ) -> StudyPlan:
+        """Store the new frequency and time and rewrite the whole schedule (F5 S4).
+
+        The previous sessions are deleted and the new ones written in the same transaction, so a
+        reader never sees a plan with half a schedule. The goal is never touched: it is what the
+        user asked for when the plan was created.
+        """
+
+    async def list_sessions(self, plan_id: str) -> list[PlanSession]:
+        """The sessions of one plan, in schedule order: week, then position."""

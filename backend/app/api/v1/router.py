@@ -2,12 +2,13 @@
 
 from fastapi import APIRouter
 
-from app.api.v1 import conversations, health, languages, lessons, translation, voice
+from app.api.v1 import conversations, health, languages, lessons, plans, translation, voice
 
 api_router = APIRouter()
 api_router.include_router(health.router)
 api_router.include_router(languages.router)
 api_router.include_router(conversations.router)
 api_router.include_router(lessons.router)
+api_router.include_router(plans.router)
 api_router.include_router(translation.router)
 api_router.include_router(voice.router)

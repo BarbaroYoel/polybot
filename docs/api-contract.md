@@ -9,7 +9,7 @@ Prefijo: `/api/v1`. Formato: JSON UTF-8. Fechas: ISO 8601 UTC (`2026-10-22T14:03
 - Identificadores: UUID v4 como string.
 - Paginación por cursor: `?limit=20&cursor=<opaco>`; respuesta `{ "items": [...], "next_cursor": "..." | null }`.
 - Errores: siempre el sobre del punto 4, nunca HTML ni texto plano.
-- Códigos de error estables (el `code` no se traduce; el `message`, sí): `language_not_found`, `conversation_not_found`, `message_not_found`, `invalid_turn_message`, `language_already_exists`, `active_language_cannot_be_archived`, `last_language_cannot_be_archived`, `invalid_cursor`, `validation_error`, `not_found`, `method_not_allowed`, `llm_unavailable`, `llm_timeout`, `invalid_audio`, `audio_too_long`, `stt_unavailable`, `internal_error`. Un código nuevo se agrega acá en el mismo commit que lo introduce.
+- Códigos de error estables (el `code` no se traduce; el `message`, sí): `language_not_found`, `conversation_not_found`, `message_not_found`, `invalid_turn_message`, `language_already_exists`, `active_language_cannot_be_archived`, `last_language_cannot_be_archived`, `plan_not_found`, `plan_already_exists`, `invalid_cursor`, `validation_error`, `not_found`, `method_not_allowed`, `llm_unavailable`, `llm_timeout`, `lesson_not_found`, `missing_lesson_answers`, `invalid_audio`, `audio_too_long`, `stt_unavailable`, `internal_error`. Un código nuevo se agrega acá en el mismo commit que lo introduce.
 - Operaciones de escritura aceptan `Idempotency-Key` (header) cuando el reintento duplicaría un turno.
 - Zona horaria: el cliente envía `tz` cuando el cálculo lo requiera (metas semanales); el servidor guarda UTC.
 
@@ -167,10 +167,31 @@ base y no solo en el stream.
 | GET | `/lessons?language_id=` | Catálogo y próxima lección. |
 | GET | `/lessons/{id}` | Lección con ejercicios. |
 | POST | `/lessons/{id}/submit` | Resultado, errores y vocabulario nuevo. |
-| GET | `/plans?language_id=` | Plan activo e hitos. |
-| POST | `/plans` | Crea plan (`goal`, `frequency`, `daily_minutes`). |
+| GET | `/plans?language_id=` | Plan del idioma con su cronograma: `{ "language_id", "plan" }`. Un idioma **sin** plan devuelve `plan: null`, no un error; un idioma inexistente es 404 `language_not_found`. El `status` de cada sesión es **derivado** de los intentos reales de su lección y nunca se guarda: `completed` si hubo un intento con todas las respuestas bien, `in_progress` si hubo un intento con algo mal, `pending` si no hay intento. `weeks` es la cantidad de semanas del cronograma (0 cuando el idioma no tiene lecciones) y `next_session` es la primera sesión que no está `completed`, en orden del cronograma, o `null` si no queda ninguna: es lo que abre «Continuar plan». **F5.** |
+| POST | `/plans` | Crea el plan del idioma (`language_id`, `goal`, `frequency`, `daily_minutes`) y responde 201 con el plan. `goal` de 1 a 200 caracteres, recortado; `frequency` de 1 a 7 sesiones por semana; `daily_minutes` de 5 a 120; fuera de rango → 422 `validation_error`. El cronograma se genera del catálogo y es **determinista**: una sesión por lección en orden de catálogo, `frequency` por semana (`week` = índice // `frequency` + 1, `position` = índice % `frequency`). Un plan por idioma: si el idioma ya tiene uno, 409 `plan_already_exists` y nada cambia. Idioma inexistente → 404 `language_not_found`. **F5 S3.** |
+| PATCH | `/plans/{id}` | Ajusta `frequency` y/o `daily_minutes` (mismos límites que el `POST`) y responde el plan. El `goal` **no** se ajusta: es lo que el usuario pidió al crear el plan. Recalcula el cronograma con la frecuencia nueva y marca `adjusted_at`; un cuerpo vacío no cambia nada, y **nada** recalcula el plan salvo este pedido: no hay job de fondo ni recálculo en el `GET`. Plan inexistente → 404 `plan_not_found`. **F5 S4.** |
 | GET | `/progress?language_id=` | Resumen de progreso y errores frecuentes. |
 | POST | `/translate` | Traducción **sin estado**: `{ "text", "source?", "target" }` → `{ "translation", "detected_source" }`. Es el camino del fragmento seleccionado: no guarda nada. `source` es el código del idioma de origen; sin `source`, el proveedor lo detecta y `detected_source` vuelve `null` (el servidor no inventa un código que no detectó). `text` de 1 a 4000 caracteres, recortado. Target inválido o texto vacío → 422 `validation_error`. **ADR-014.** |
+
+#### El plan y su cronograma
+
+```jsonc
+// Plan
+{ "id": "uuid", "language_id": "uuid", "goal": "Pasar de A1 a B1 en francés",
+  "frequency": 2, "daily_minutes": 20, "weeks": 4,
+  "created_at": "...", "adjusted_at": null,        // null hasta el primer PATCH
+  "next_session": PlanSession | null,               // null cuando todas están completas
+  "sessions": [ PlanSession ] }
+
+// PlanSession
+{ "id": "uuid", "week": 1, "position": 0, "lesson_id": "uuid",
+  "lesson_title": "Pedir algo en un café", "status": "pending|in_progress|completed" }
+```
+
+- `sessions` viene en orden de cronograma: por `week`, después por `position`.
+- El calendario son las semanas de `sessions`: el servidor guarda el cronograma relativo por
+  semanas, no fechas. Ponerle días al calendario es tarea de la PWA.
+- `status` es de solo lectura en todo el contrato: no hay endpoint que lo cambie a mano.
 
 ## 4. Sobre de error
 
