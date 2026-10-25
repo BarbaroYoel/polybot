@@ -47,7 +47,17 @@ def test_migration_creates_the_language_conversation_and_message_tables(database
         finally:
             await engine.dispose()
 
-    assert {"languages", "conversations", "messages"} <= asyncio.run(tables())
+    expected = {
+        "languages",
+        "conversations",
+        "messages",
+        "lesson_units",
+        "lessons",
+        "lesson_exercises",
+        "lesson_vocabulary",
+        "lesson_attempts",
+    }
+    assert expected <= asyncio.run(tables())
 
 
 def test_seed_inserts_the_example_data_once(
@@ -66,8 +76,22 @@ def test_seed_inserts_the_example_data_once(
 
     first, second, active = asyncio.run(scenario())
 
-    assert first == {"languages": 3, "conversations": 2, "messages": 7}
-    assert second == {"languages": 0, "conversations": 0, "messages": 0}
+    assert first == {
+        "languages": 3,
+        "conversations": 2,
+        "messages": 7,
+        "lessons": 12,
+        "exercises": 36,
+        "terms": 24,
+    }
+    assert second == {
+        "languages": 0,
+        "conversations": 0,
+        "messages": 0,
+        "lessons": 0,
+        "exercises": 0,
+        "terms": 0,
+    }
     assert active == {"en"}, "exactly one language is active (docs/api-contract.md §3)"
 
 

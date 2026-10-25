@@ -8,6 +8,13 @@ from app.domain.entities import (
     CefrLevel,
     Conversation,
     LanguageProfile,
+    Lesson,
+    LessonAnswer,
+    LessonAttempt,
+    LessonExercise,
+    LessonStatus,
+    LessonTerm,
+    LessonUnit,
     Message,
     MessageStatus,
     NewConversation,
@@ -106,3 +113,38 @@ class MessageRepository(Protocol):
 
     async def feedback_for_messages(self, message_ids: Sequence[str]) -> dict[str, MessageFeedback]:
         """Feedback of the given messages, keyed by message id, in one query (no N+1)."""
+
+
+class LessonRepository(Protocol):
+    """Lessons, their units and their exercises, always filtered by language (F5 S6)."""
+
+    async def list_units(self, language_id: str) -> list[LessonUnit]:
+        """Units of one language, in catalog order."""
+
+    async def list_lessons(self, language_id: str) -> list[Lesson]:
+        """Lessons of one language, in catalog order: unit position, then lesson position."""
+
+    async def get_lesson(self, lesson_id: str) -> Lesson | None: ...
+
+    async def get_unit(self, unit_id: str) -> LessonUnit | None: ...
+
+    async def list_exercises(self, lesson_id: str) -> list[LessonExercise]:
+        """Exercises of one lesson, in order, each with every answer it accepts."""
+
+    async def lesson_statuses(self, language_id: str) -> dict[str, LessonStatus]:
+        """Status of every lesson of one language, derived from the stored attempts (S5)."""
+
+    async def list_terms(self, lesson_id: str) -> list[LessonTerm]:
+        """The key terms of one lesson, in order: the «vocabulario nuevo» of its result (S2)."""
+
+
+class LessonAttemptRepository(Protocol):
+    async def add_attempt(
+        self,
+        *,
+        lesson_id: str,
+        language_id: str,
+        answers: Sequence[LessonAnswer],
+        feedback: str | None,
+    ) -> LessonAttempt:
+        """Store one finished practice with its answers, so F6 can read them later (S7)."""

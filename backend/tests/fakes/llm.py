@@ -12,6 +12,7 @@ from collections.abc import AsyncIterator, Sequence
 from app.domain.errors import DomainError
 from app.ports.llm import (
     EMPTY_FEEDBACK,
+    LessonReviewRequest,
     TranslationRequest,
     TurnFeedback,
     TutorTurn,
@@ -29,6 +30,8 @@ class FakeLlm:
         summary_failure: DomainError | None = None,
         translation: str = "¿Cómo estás?",
         translation_failure: DomainError | None = None,
+        lesson_comment: str = "Muy bien: solo falta el acento de «élève».",
+        lesson_comment_failure: DomainError | None = None,
     ) -> None:
         self.deltas = list(deltas)
         self.failure = failure
@@ -36,6 +39,8 @@ class FakeLlm:
         self.summary_failure = summary_failure
         self.translation = translation
         self.translation_failure = translation_failure
+        self.lesson_comment = lesson_comment
+        self.lesson_comment_failure = lesson_comment_failure
         self.turn: TutorTurn | None = None
         self.calls = 0
         self.closed = False
@@ -43,6 +48,8 @@ class FakeLlm:
         self.summaries: list[tuple[TutorTurn, str]] = []
         # One entry per translation call, in order: what the provider was asked to translate.
         self.translations: list[TranslationRequest] = []
+        # One entry per lesson review, in order: the graded result the tutor had to comment.
+        self.lesson_reviews: list[LessonReviewRequest] = []
 
     def stream_reply(self, turn: TutorTurn) -> AsyncIterator[str]:
         self.turn = turn
@@ -64,6 +71,12 @@ class FakeLlm:
         if self.summary_failure is not None:
             raise self.summary_failure
         return self.feedback
+
+    async def review_lesson(self, request: LessonReviewRequest) -> str:
+        self.lesson_reviews.append(request)
+        if self.lesson_comment_failure is not None:
+            raise self.lesson_comment_failure
+        return self.lesson_comment
 
     async def translate(self, request: TranslationRequest) -> str:
         self.translations.append(request)

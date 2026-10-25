@@ -14,8 +14,13 @@ from app.adapters.db.conversations import (
     SqlAlchemyMessageRepository,
 )
 from app.adapters.db.languages import SqlAlchemyLanguageRepository
+from app.adapters.db.lessons import (
+    SqlAlchemyLessonAttemptRepository,
+    SqlAlchemyLessonRepository,
+)
 from app.application.conversations import ConversationService
 from app.application.languages import LanguageService
+from app.application.lessons import LessonService
 from app.application.translation import TranslationService
 from app.application.tutor import TutorService
 from app.application.voice import VoiceService
@@ -83,6 +88,19 @@ async def get_translation_service(
     return TranslationService(
         conversations=SqlAlchemyConversationRepository(session),
         messages=SqlAlchemyMessageRepository(session),
+        languages=SqlAlchemyLanguageRepository(session),
+        llm=llm,
+    )
+
+
+async def get_lesson_service(
+    session: AsyncSession = Depends(get_session),
+    llm: LlmPort = Depends(get_llm),
+) -> LessonService:
+    """Grading is deterministic; the provider only writes the closing comment (F5 S8)."""
+    return LessonService(
+        lessons=SqlAlchemyLessonRepository(session),
+        attempts=SqlAlchemyLessonAttemptRepository(session),
         languages=SqlAlchemyLanguageRepository(session),
         llm=llm,
     )

@@ -29,12 +29,14 @@ from typing import Any
 
 from app.adapters.llm.prompt import (
     FeedbackPrompt,
+    LessonReviewPrompt,
     TranslationPrompt,
     TutorPrompt,
 )
 from app.domain.errors import LlmTimeout, LlmUnavailable
 from app.ports.llm import (
     CorrectionDraft,
+    LessonReviewRequest,
     TranslationRequest,
     TurnFeedback,
     TutorTurn,
@@ -64,6 +66,9 @@ MAX_REPLY_CHARS = 20_000
 # than this is not a translation but the model answering something else.
 MAX_TRANSLATION_CHARS = 6_000
 
+# A lesson comment is one to three sentences; anything longer is the model writing a lesson.
+MAX_LESSON_COMMENT_CHARS = 1_200
+
 _FAILURE_MESSAGES = {
     "error": "El tutor no pudo responder. Vuelve a intentar en unos segundos.",
     "aborted": "La respuesta del tutor se interrumpió. Vuelve a intentar.",
@@ -73,6 +78,8 @@ _FAILURE_MESSAGES = {
 _MALFORMED_FEEDBACK = "El tutor devolvió un cierre de turno ilegible. Vuelve a intentar."
 
 _EMPTY_TRANSLATION = "El traductor no devolvió texto. Vuelve a intentar."
+
+_EMPTY_LESSON_COMMENT = "El tutor no devolvió un comentario. Vuelve a intentar."
 
 # docs/api-contract.md §3: the cards of one turn are bounded, and the prompt asks for the same.
 MAX_CORRECTIONS = 5
@@ -91,6 +98,7 @@ class PiCliAdapter:
         prompt: TutorPrompt | None = None,
         feedback_prompt: FeedbackPrompt | None = None,
         translation_prompt: TranslationPrompt | None = None,
+        lesson_review_prompt: LessonReviewPrompt | None = None,
     ) -> None:
         self._command = tuple(command)
         self._model = model or None
@@ -98,6 +106,7 @@ class PiCliAdapter:
         self._prompt = prompt or TutorPrompt.load()
         self._feedback = feedback_prompt or FeedbackPrompt.load()
         self._translation = translation_prompt or TranslationPrompt.load()
+        self._lesson_review = lesson_review_prompt or LessonReviewPrompt.load()
 
     def _argv(self, system_prompt: str) -> list[str]:
         argv = [
@@ -136,6 +145,15 @@ class PiCliAdapter:
         argv = self._argv(self._feedback.render_system(turn.context))
         prompt = self._feedback.render_turn(turn, reply)
         return parse_turn_feedback(await self._complete(argv, prompt))
+
+    async def review_lesson(self, request: LessonReviewRequest) -> str:
+        """One short invocation that comments on a graded lesson (F5 S2, best-effort)."""
+        argv = self._argv(self._lesson_review.render_system(request.context))
+        prompt = self._lesson_review.render_turn(request)
+        answer = (await self._complete(argv, prompt)).strip()
+        if not answer:
+            raise LlmUnavailable(_EMPTY_LESSON_COMMENT)
+        return answer[:MAX_LESSON_COMMENT_CHARS]
 
     async def translate(self, request: TranslationRequest) -> str:
         """One short invocation that returns only the translation (ADR-014)."""

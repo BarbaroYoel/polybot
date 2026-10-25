@@ -90,6 +90,33 @@ class TranslationRequest:
     source_language: str | None = None
 
 
+@dataclass(frozen=True, slots=True)
+class LessonReviewItem:
+    """One graded exercise, as the tutor needs it to comment on the result (F5 S2)."""
+
+    prompt: str
+    answer: str
+    expected: str
+    correct: bool
+
+
+@dataclass(frozen=True, slots=True)
+class LessonReviewRequest:
+    """A finished lesson and its graded answers, oldest first."""
+
+    context: TutorContext
+    lesson_title: str
+    items: Sequence[LessonReviewItem]
+
+    @property
+    def correct(self) -> int:
+        return sum(1 for item in self.items if item.correct)
+
+    @property
+    def total(self) -> int:
+        return len(self.items)
+
+
 class LlmPort(Protocol):
     def stream_reply(self, turn: TutorTurn) -> AsyncIterator[str]:
         """Yield the tutor reply as text deltas, in order.
@@ -104,6 +131,14 @@ class LlmPort(Protocol):
         A separate invocation of the same provider, so the text the user already read is not
         delayed by the closing step. An unusable answer is an `LlmUnavailable`: the caller keeps
         the reply and skips the feedback (the chat is never broken by this step).
+        """
+
+    async def review_lesson(self, request: LessonReviewRequest) -> str:
+        """Comment on a finished lesson, in the explanation language (S8, best-effort).
+
+        One short invocation of the same provider. The grading already happened without the model,
+        so an unusable answer is an `LlmUnavailable`: the caller keeps the result and stores the
+        attempt with no comment instead of failing the lesson.
         """
 
     async def translate(self, request: TranslationRequest) -> str:

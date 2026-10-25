@@ -3,8 +3,15 @@
 from collections.abc import Iterable, Mapping
 from typing import Annotated, Protocol
 
-from pydantic import BaseModel, Field, StringConstraints
+from pydantic import BaseModel, Field, StringConstraints, model_validator
 
+from app.application.lessons import (
+    CatalogLesson,
+    CatalogUnit,
+    LessonCatalog,
+    LessonDetail,
+    LessonResult,
+)
 from app.application.pagination import Page
 from app.core.dates import to_iso
 from app.domain.entities import (
@@ -12,6 +19,9 @@ from app.domain.entities import (
     Conversation,
     ConversationMode,
     LanguageProfile,
+    LessonStatus,
+    LessonTerm,
+    LessonUnitKind,
     Message,
     MessageAuthor,
     MessageStatus,
@@ -256,3 +266,185 @@ class MessagePage(BaseModel):
 
 class ConversationDetailOut(ConversationOut):
     messages: MessagePage
+
+
+class LessonSummaryOut(BaseModel):
+    """One lesson as the catalog lists it: what it is, and the state its attempts give it (S1)."""
+
+    id: str
+    unit_id: str
+    title: str
+    difficulty: CefrLevel
+    estimated_minutes: int
+    position: int
+    status: LessonStatus
+
+    @classmethod
+    def from_entry(cls, entry: CatalogLesson) -> "LessonSummaryOut":
+        return cls(
+            id=entry.lesson.id,
+            unit_id=entry.lesson.unit_id,
+            title=entry.lesson.title,
+            difficulty=entry.lesson.difficulty,
+            estimated_minutes=entry.lesson.estimated_minutes,
+            position=entry.lesson.position,
+            status=entry.status,
+        )
+
+
+class LessonUnitOut(BaseModel):
+    id: str
+    kind: LessonUnitKind
+    title: str
+    description: str
+    position: int
+    lessons: list[LessonSummaryOut]
+
+    @classmethod
+    def from_entry(cls, entry: CatalogUnit) -> "LessonUnitOut":
+        return cls(
+            id=entry.unit.id,
+            kind=entry.unit.kind,
+            title=entry.unit.title,
+            description=entry.unit.description,
+            position=entry.unit.position,
+            lessons=[LessonSummaryOut.from_entry(lesson) for lesson in entry.lessons],
+        )
+
+
+class LessonCatalogOut(BaseModel):
+    language_id: str
+    language_name: str
+    level: CefrLevel
+    next_lesson: LessonSummaryOut | None
+    units: list[LessonUnitOut]
+
+    @classmethod
+    def from_entity(cls, catalog: LessonCatalog) -> "LessonCatalogOut":
+        return cls(
+            language_id=catalog.language.id,
+            language_name=catalog.language.name,
+            level=catalog.language.level,
+            next_lesson=(
+                LessonSummaryOut.from_entry(catalog.next_lesson)
+                if catalog.next_lesson is not None
+                else None
+            ),
+            units=[LessonUnitOut.from_entry(unit) for unit in catalog.units],
+        )
+
+
+class LessonExerciseOut(BaseModel):
+    """One exercise as the student sees it: the prompt, never the accepted answers (S8)."""
+
+    id: str
+    position: int
+    prompt: str
+
+
+class LessonDetailOut(BaseModel):
+    id: str
+    language_id: str
+    unit_id: str
+    unit_title: str
+    unit_kind: LessonUnitKind
+    title: str
+    difficulty: CefrLevel
+    estimated_minutes: int
+    intro: str
+    exercises: list[LessonExerciseOut]
+
+    @classmethod
+    def from_entity(cls, detail: LessonDetail) -> "LessonDetailOut":
+        return cls(
+            id=detail.lesson.id,
+            language_id=detail.lesson.language_id,
+            unit_id=detail.unit.id,
+            unit_title=detail.unit.title,
+            unit_kind=detail.unit.kind,
+            title=detail.lesson.title,
+            difficulty=detail.lesson.difficulty,
+            estimated_minutes=detail.lesson.estimated_minutes,
+            intro=detail.lesson.intro,
+            exercises=[
+                LessonExerciseOut(
+                    id=exercise.id,
+                    position=exercise.position,
+                    prompt=exercise.prompt,
+                )
+                for exercise in detail.exercises
+            ],
+        )
+
+
+class LessonAnswerIn(BaseModel):
+    exercise_id: str = Field(min_length=1, max_length=64)
+    answer: str = Field(min_length=1, max_length=400)
+
+
+class LessonSubmitIn(BaseModel):
+    answers: list[LessonAnswerIn] = Field(min_length=1, max_length=50)
+
+    @model_validator(mode="after")
+    def _one_answer_per_exercise(self) -> "LessonSubmitIn":
+        ids = [answer.exercise_id for answer in self.answers]
+        if len(ids) != len(set(ids)):
+            raise ValueError("cada ejercicio se responde una sola vez")
+        return self
+
+
+class LessonMistakeOut(BaseModel):
+    exercise_id: str
+    prompt: str
+    answer: str
+    expected: str
+    explanation: str
+
+
+class LessonTermOut(BaseModel):
+    term: str
+    translation: str
+    note: str | None
+
+    @classmethod
+    def from_entity(cls, term: LessonTerm) -> "LessonTermOut":
+        return cls(term=term.term, translation=term.translation, note=term.note)
+
+
+class LessonResultOut(BaseModel):
+    attempt_id: str
+    lesson_id: str
+    correct: int
+    total: int
+    completed: bool
+    mistakes: list[LessonMistakeOut]
+    vocabulary: list[LessonTermOut]
+    feedback: str | None
+    next_lesson: LessonSummaryOut | None
+
+    @classmethod
+    def from_entity(cls, result: LessonResult) -> "LessonResultOut":
+        return cls(
+            attempt_id=result.attempt.id,
+            lesson_id=result.lesson.id,
+            correct=result.attempt.correct,
+            total=result.attempt.total,
+            completed=result.attempt.completed,
+            mistakes=[
+                LessonMistakeOut(
+                    exercise_id=mistake.exercise_id,
+                    prompt=mistake.prompt,
+                    answer=mistake.answer,
+                    expected=mistake.expected,
+                    explanation=mistake.explanation,
+                )
+                for mistake in result.mistakes
+            ],
+            vocabulary=[LessonTermOut.from_entity(term) for term in result.terms],
+            feedback=result.attempt.feedback,
+            next_lesson=(
+                LessonSummaryOut.from_entry(result.next_lesson)
+                if result.next_lesson is not None
+                else None
+            ),
+        )
