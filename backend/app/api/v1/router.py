@@ -2,9 +2,10 @@
 
 from fastapi import APIRouter
 
-from app.api.v1 import conversations, health, languages
+from app.api.v1 import conversations, health, languages, translation
 
 api_router = APIRouter()
 api_router.include_router(health.router)
 api_router.include_router(languages.router)
 api_router.include_router(conversations.router)
+api_router.include_router(translation.router)

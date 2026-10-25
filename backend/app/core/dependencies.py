@@ -16,6 +16,7 @@ from app.adapters.db.conversations import (
 from app.adapters.db.languages import SqlAlchemyLanguageRepository
 from app.application.conversations import ConversationService
 from app.application.languages import LanguageService
+from app.application.translation import TranslationService
 from app.application.tutor import TutorService
 from app.ports.llm import LlmPort
 
@@ -51,6 +52,19 @@ async def get_conversation_service(
 def get_llm(request: Request) -> LlmPort:
     """The tutor provider wired at startup (a Pi subprocess); tests override this dependency."""
     return request.app.state.llm
+
+
+async def get_translation_service(
+    session: AsyncSession = Depends(get_session),
+    llm: LlmPort = Depends(get_llm),
+) -> TranslationService:
+    """The same provider as the tutor, asked for a translation instead of a turn (ADR-014)."""
+    return TranslationService(
+        conversations=SqlAlchemyConversationRepository(session),
+        messages=SqlAlchemyMessageRepository(session),
+        languages=SqlAlchemyLanguageRepository(session),
+        llm=llm,
+    )
 
 
 async def get_tutor_service(

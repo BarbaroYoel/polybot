@@ -5,6 +5,7 @@ import { EmptyState, ErrorState, LoadingState } from "../../components/States";
 import { sendMessage, streamTurn } from "../../lib/api/chat";
 import { errorMessage, isApiError, toApiError } from "../../lib/api/client";
 import { getConversation } from "../../lib/api/conversations";
+import { translateMessage as requestMessageTranslation, translateText } from "../../lib/api/translate";
 import type {
   ConversationDetail,
   Correction as ApiCorrection,
@@ -337,6 +338,41 @@ export function ChatPage() {
     setDraft(label);
   };
 
+  // The direction of every translation comes from the conversation's language, never from the
+  // globally active one (S3): the screen already resolved it to switch the context.
+  const translateDirection = useMemo(
+    () =>
+      conversationLanguage
+        ? { source: conversationLanguage.code, target: conversationLanguage.explanation_language }
+        : null,
+    [conversationLanguage],
+  );
+
+  /** A selected fragment: translated and forgotten, so nothing is written (S2). */
+  const handleTranslateFragment = useCallback(
+    async (text: string): Promise<string> => {
+      if (!translateDirection) throw new Error("translation_not_ready");
+      const result = await translateText({
+        text,
+        source: translateDirection.source,
+        target: translateDirection.target,
+      });
+      return result.translation;
+    },
+    [translateDirection],
+  );
+
+  /** The whole message: stored by the API, so a reload shows it again (S2). */
+  const handleTranslateMessage = useCallback(
+    async (messageId: string): Promise<string> => {
+      if (!conversationId) throw new Error("translation_not_ready");
+      const stored = await requestMessageTranslation(conversationId, messageId);
+      if (!stored.translation) throw new Error("translation_empty");
+      return stored.translation;
+    },
+    [conversationId],
+  );
+
   const recovery = (
     <EmptyState
       title="No encontramos esa conversación"
@@ -418,7 +454,13 @@ export function ChatPage() {
               description="Está recién creada. Escribe el primer mensaje y el tutor te responde."
             />
           ) : (
-            <ChatThread items={items} onQuickAction={handleQuickAction} onRetry={handleRetry} />
+            <ChatThread
+              items={items}
+              onQuickAction={handleQuickAction}
+              onRetry={handleRetry}
+              onTranslateMessage={handleTranslateMessage}
+              onTranslateFragment={handleTranslateFragment}
+            />
           )}
         </div>
 

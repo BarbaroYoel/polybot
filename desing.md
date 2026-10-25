@@ -200,6 +200,9 @@ reúne el hilo y el compositor. Ninguna pantalla dibuja su contenido sobre la ot
 - Respuestas del tutor pueden incluir **audio, ejercicios, traducciones, correcciones o tarjetas de vocabulario**.
 - Sugerencias rápidas después de un mensaje: «Practicar una conversación», «Repasar vocabulario», «Simular una situación», «Pedir una explicación».
 - Ante frases del tutor: «No entiendo», «Más lento», «Traducir» y botón para volver a escuchar.
+- «Traducir» traduce **el mensaje completo**, sin reemplazar el original, o **solo el fragmento
+  seleccionado** dentro de esa burbuja cuando hay una selección; el panel cita entonces el fragmento
+  traducido. La traducción del fragmento no se conserva al recargar; la del mensaje sí (ADR-014).
 - La zona de mensajes tiene scroll propio: el hilo nunca se dibuja encima del aviso ni del compositor.
 
 **Compositor inferior:**
@@ -300,6 +303,8 @@ El chat principal mantiene una estructura única, pero puede iniciar distintas a
 - Iniciar voz → solicitar permiso de micrófono cuando corresponda y mostrar estado visible.
 - Pulsar «Más lento» → reproducir o generar la frase a menor velocidad.
 - Pulsar «Traducir» → mostrar la traducción de ese mensaje, sin reemplazar permanentemente el original.
+  Si hay texto seleccionado dentro del mensaje, traduce solo esa selección, que se cita junto a la
+  traducción para no confundirla con el mensaje entero.
 - Pulsar «No entiendo» → pedir una explicación más simple y adaptada al nivel.
 - Completar lección → guardar resultado y actualizar el progreso correspondiente.
 

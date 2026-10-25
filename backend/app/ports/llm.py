@@ -76,6 +76,20 @@ class TurnFeedback:
 EMPTY_FEEDBACK = TurnFeedback()
 
 
+@dataclass(frozen=True, slots=True)
+class TranslationRequest:
+    """One text to translate, with the direction the caller already decided (ADR-014).
+
+    `source_language` is the language code of the original or `None` when the caller does not know
+    it and the provider must detect it. `target_language` is never guessed by the adapter: the
+    language of the explanation comes from the caller's profile, not from the provider.
+    """
+
+    text: str
+    target_language: str
+    source_language: str | None = None
+
+
 class LlmPort(Protocol):
     def stream_reply(self, turn: TutorTurn) -> AsyncIterator[str]:
         """Yield the tutor reply as text deltas, in order.
@@ -90,4 +104,11 @@ class LlmPort(Protocol):
         A separate invocation of the same provider, so the text the user already read is not
         delayed by the closing step. An unusable answer is an `LlmUnavailable`: the caller keeps
         the reply and skips the feedback (the chat is never broken by this step).
+        """
+
+    async def translate(self, request: TranslationRequest) -> str:
+        """Translate one text into `target_language` and return only the translation (ADR-014).
+
+        A short invocation of the same provider: an empty or unusable answer is an
+        `LlmUnavailable`, so a translation is never stored as an empty string.
         """

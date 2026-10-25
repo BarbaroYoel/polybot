@@ -88,6 +88,28 @@ class MessageCreate(BaseModel):
     content: MessageContent
 
 
+# Contract §5: the text of a translation is bounded like a message; a selection is shorter.
+TranslationText = Annotated[
+    str, StringConstraints(strip_whitespace=True, min_length=1, max_length=4000)
+]
+# ISO 639-1 (`fr`) or a regional variant (`pt-BR`).
+LanguageCode = Annotated[str, StringConstraints(strip_whitespace=True, min_length=2, max_length=8)]
+
+
+class TranslateRequest(BaseModel):
+    """The stateless translation: a message or a fragment, with the direction the UI decided."""
+
+    text: TranslationText
+    source: LanguageCode | None = None
+    target: LanguageCode
+
+
+class TranslateOut(BaseModel):
+    translation: str
+    # The source used, or `null` when the caller did not send one and the provider detected it.
+    detected_source: str | None
+
+
 class CorrectionOut(BaseModel):
     """One correction card of a closing turn (F3 S7)."""
 

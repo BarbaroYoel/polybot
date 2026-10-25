@@ -27,9 +27,19 @@ from collections.abc import AsyncIterator, Sequence
 from contextlib import asynccontextmanager
 from typing import Any
 
-from app.adapters.llm.prompt import FeedbackPrompt, TutorPrompt
+from app.adapters.llm.prompt import (
+    FeedbackPrompt,
+    TranslationPrompt,
+    TutorPrompt,
+)
 from app.domain.errors import LlmTimeout, LlmUnavailable
-from app.ports.llm import CorrectionDraft, TurnFeedback, TutorTurn, VocabularyDraft
+from app.ports.llm import (
+    CorrectionDraft,
+    TranslationRequest,
+    TurnFeedback,
+    TutorTurn,
+    VocabularyDraft,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -50,6 +60,10 @@ _ISOLATION_FLAGS = (
 # A runaway answer is cut instead of stored: the UI never renders more than this per turn.
 MAX_REPLY_CHARS = 20_000
 
+# A translation of a bounded text (docs/api-contract.md §5) is a sentence or a short paragraph; more
+# than this is not a translation but the model answering something else.
+MAX_TRANSLATION_CHARS = 6_000
+
 _FAILURE_MESSAGES = {
     "error": "El tutor no pudo responder. Vuelve a intentar en unos segundos.",
     "aborted": "La respuesta del tutor se interrumpió. Vuelve a intentar.",
@@ -57,6 +71,8 @@ _FAILURE_MESSAGES = {
 }
 
 _MALFORMED_FEEDBACK = "El tutor devolvió un cierre de turno ilegible. Vuelve a intentar."
+
+_EMPTY_TRANSLATION = "El traductor no devolvió texto. Vuelve a intentar."
 
 # docs/api-contract.md §3: the cards of one turn are bounded, and the prompt asks for the same.
 MAX_CORRECTIONS = 5
@@ -74,12 +90,14 @@ class PiCliAdapter:
         timeout_seconds: float = 60.0,
         prompt: TutorPrompt | None = None,
         feedback_prompt: FeedbackPrompt | None = None,
+        translation_prompt: TranslationPrompt | None = None,
     ) -> None:
         self._command = tuple(command)
         self._model = model or None
         self._timeout = timeout_seconds
         self._prompt = prompt or TutorPrompt.load()
         self._feedback = feedback_prompt or FeedbackPrompt.load()
+        self._translation = translation_prompt or TranslationPrompt.load()
 
     def _argv(self, system_prompt: str) -> list[str]:
         argv = [
@@ -117,6 +135,20 @@ class PiCliAdapter:
         """Close the turn: a second short invocation that returns the structured feedback (S7)."""
         argv = self._argv(self._feedback.render_system(turn.context))
         prompt = self._feedback.render_turn(turn, reply)
+        return parse_turn_feedback(await self._complete(argv, prompt))
+
+    async def translate(self, request: TranslationRequest) -> str:
+        """One short invocation that returns only the translation (ADR-014)."""
+        argv = self._argv(self._translation.render_system(request))
+        prompt = self._translation.render_turn(request)
+        return parse_translation(await self._complete(argv, prompt))
+
+    async def _complete(self, argv: Sequence[str], prompt: str) -> str:
+        """Run one invocation to the end and return the whole answer.
+
+        `summarize_turn` and `translate` share it: the same isolation, the same budget and the same
+        failure mapping, so a provider failure reads the same in both paths.
+        """
         try:
             async with asyncio.timeout(self._timeout):
                 async with self._run(argv, prompt) as (process, stderr_task):
@@ -129,7 +161,7 @@ class PiCliAdapter:
         except TimeoutError as exc:
             raise LlmTimeout(_FAILURE_MESSAGES["timeout"]) from exc
 
-        return parse_turn_feedback(answer)
+        return answer
 
     @asynccontextmanager
     async def _run(self, argv: Sequence[str], prompt: str) -> AsyncIterator[tuple[Any, Any]]:
@@ -241,6 +273,28 @@ class PiCliAdapter:
     def _log_failure(returncode: int, stderr: bytes) -> None:
         tail = stderr.decode("utf-8", errors="replace").strip().splitlines()
         logger.warning("pi exited with %s: %s", returncode, tail[-1] if tail else "(no stderr)")
+
+
+_WRAPPING_QUOTES = (('"', '"'), ("'", "'"), ("«", "»"), ("“", "”"))
+
+
+def parse_translation(answer: str) -> str:
+    """The translation, or `LlmUnavailable` when the answer is not a usable one (ADR-014).
+
+    The prompt asks for the sentence alone; a model that still wraps it in quotes is unwrapped
+    here instead of being stored with them. Nothing else is repaired: an empty answer is a failure,
+    not a translation, and a runaway answer is refused instead of truncated.
+    """
+    text = answer.strip()
+    for opening, closing in _WRAPPING_QUOTES:
+        if len(text) >= 2 and text.startswith(opening) and text.endswith(closing):
+            text = text[len(opening) : -len(closing)].strip()
+            break
+    if not text:
+        raise LlmUnavailable(_EMPTY_TRANSLATION)
+    if len(text) > MAX_TRANSLATION_CHARS:
+        raise LlmUnavailable(_FAILURE_MESSAGES["error"])
+    return text
 
 
 def parse_turn_feedback(answer: str) -> TurnFeedback:

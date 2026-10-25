@@ -16,6 +16,9 @@ Behavior is driven by `FAKE_PI_MODE`:
 | `feedback-json`   | the closing-turn JSON the adapter parses (F3 S7)                     |
 | `feedback`        | alias of `feedback-json`, kept for older fixtures                    |
 | `feedback-broken` | prose instead of JSON: the closing call must fail, not guess         |
+| `translate`       | one translated sentence, from `FAKE_PI_TRANSLATION` (ADR-014)        |
+| `translate-quoted`| the same sentence wrapped in double quotes                            |
+| `translate-empty` | an empty answer: the translation must fail, not return ""            |
 
 Tests read `FAKE_PI_PROMPT_FILE` (the prompt received on stdin), `FAKE_PI_SYSTEM_FILE` (the
 `--system-prompt` value), `FAKE_PI_ARGV_FILE` (the whole argv, so a test can prove the flags that
@@ -231,6 +234,18 @@ def run_empty() -> None:
     assistant_end("")
 
 
+TRANSLATION = os.environ.get("FAKE_PI_TRANSLATION", "¿Cómo estás?")
+
+
+def run_translation(text: str) -> None:
+    header()
+    user_message("traducir")
+    assistant_start()
+    if text:
+        delta(text)
+    assistant_end(text)
+
+
 def main() -> None:
     prompt = sys.stdin.read()
     prompt_file = os.environ.get("FAKE_PI_PROMPT_FILE")
@@ -265,6 +280,12 @@ def main() -> None:
         run_feedback_broken()
     elif MODE == "empty":
         run_empty()
+    elif MODE == "translate":
+        run_translation(TRANSLATION)
+    elif MODE == "translate-quoted":
+        run_translation(f'"{TRANSLATION}"')
+    elif MODE == "translate-empty":
+        run_translation("")
     elif MODE == "fail":
         sys.stderr.write("pi: no credentials configured\n")
         sys.exit(2)

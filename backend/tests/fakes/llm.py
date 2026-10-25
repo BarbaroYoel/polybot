@@ -1,15 +1,21 @@
-"""A deterministic double of the `LlmPort` (F3 S2, S5, S7).
+"""A deterministic double of the `LlmPort` (F3 S2, S5, S7; ADR-014).
 
 The real adapter launches a Pi subprocess and needs a model; the API tests need the turn to be
 predictable and offline. The double yields the configured deltas, optionally fails after them,
 produces the configured closing feedback (or fails the closing call) and keeps what it received so
-a test can assert the context, the history and the reply the closing call had to judge.
+a test can assert the context, the history and the reply the closing call had to judge. It also
+answers translations (ADR-014) and records the direction each one asked for.
 """
 
 from collections.abc import AsyncIterator, Sequence
 
 from app.domain.errors import DomainError
-from app.ports.llm import EMPTY_FEEDBACK, TurnFeedback, TutorTurn
+from app.ports.llm import (
+    EMPTY_FEEDBACK,
+    TranslationRequest,
+    TurnFeedback,
+    TutorTurn,
+)
 
 
 class FakeLlm:
@@ -21,16 +27,22 @@ class FakeLlm:
         failure: DomainError | None = None,
         feedback: TurnFeedback = EMPTY_FEEDBACK,
         summary_failure: DomainError | None = None,
+        translation: str = "¿Cómo estás?",
+        translation_failure: DomainError | None = None,
     ) -> None:
         self.deltas = list(deltas)
         self.failure = failure
         self.feedback = feedback
         self.summary_failure = summary_failure
+        self.translation = translation
+        self.translation_failure = translation_failure
         self.turn: TutorTurn | None = None
         self.calls = 0
         self.closed = False
         # One entry per closing call, in order: what the provider was asked to summarize.
         self.summaries: list[tuple[TutorTurn, str]] = []
+        # One entry per translation call, in order: what the provider was asked to translate.
+        self.translations: list[TranslationRequest] = []
 
     def stream_reply(self, turn: TutorTurn) -> AsyncIterator[str]:
         self.turn = turn
@@ -52,3 +64,9 @@ class FakeLlm:
         if self.summary_failure is not None:
             raise self.summary_failure
         return self.feedback
+
+    async def translate(self, request: TranslationRequest) -> str:
+        self.translations.append(request)
+        if self.translation_failure is not None:
+            raise self.translation_failure
+        return self.translation

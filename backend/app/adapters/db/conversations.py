@@ -190,6 +190,14 @@ class SqlAlchemyMessageRepository:
         await self._session.flush()
         return _to_message(row)
 
+    async def set_translation(self, message_id: str, translation: str) -> Message:
+        row = await self._session.get(MessageRow, message_id)
+        if row is None:
+            raise LookupError(message_id)
+        row.translation = translation
+        await self._session.flush()
+        return _to_message(row)
+
     async def list_messages_before(
         self, conversation_id: str, before: Message, *, limit: int
     ) -> list[Message]:

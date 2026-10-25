@@ -217,6 +217,40 @@ sin ORM (migraciones a cargo del equipo); token fijo desde el arranque (suma gua
 
 ---
 
+## ADR-014 — La traducción es un turno corto del mismo proveedor, y solo el mensaje se guarda
+
+**Estado:** aceptada · **Fecha:** 2026-10-23 · **Resuelve:** `/translate` de `docs/api-contract.md` (estaba
+en el contrato sin implementar) y habilita la traducción por selección de `desing.md` §6.1.2 y §8
+
+**Contexto.** `desing.md` §8 ya pedía «Pulsar «Traducir» → mostrar la traducción de ese mensaje», y el
+contrato listaba `/translate` sin implementación: la pantalla tenía el botón con un texto fijo. El pedido
+del humano (`odd/tasks/message-translation.md`, L1) agregó la traducción de un fragmento seleccionado, y
+en L2 eligió que el disparo sea el botón del mensaje, sin UI flotante.
+
+**Decisión.**
+
+1. Un tercer uso del mismo proveedor: `LlmPort.translate(TranslationRequest)`, con el prompt versionado
+   `translate.v1` y la misma invocación aislada que el tutor y el cierre del turno (ADR-013). Sin SDK, sin
+   clave y sin proveedor nuevo.
+2. Dos endpoints con dos vidas distintas: `POST /translate` traduce sin guardar (el fragmento) y
+   `POST /conversations/{id}/messages/{message_id}/translation` traduce y persiste el mensaje completo. El
+   segundo es idempotente: con traducción guardada no se vuelve a llamar al proveedor.
+3. La dirección la decide el servidor desde el `LanguageProfile` de la conversación —origen `code`,
+   destino `explanation_language`— y nunca desde el idioma activo global (AGENTS.md §3).
+4. Solo el mensaje completo se persiste, en `messages.translation`, columna que ya existía: el fragmento
+   vive en el estado de la burbuja y se pierde al recargar a propósito.
+5. Una respuesta vacía o desmesurada es `llm_unavailable` (502), nunca una traducción vacía guardada.
+
+**Consecuencias.**
+
+- Cada traducción cuesta una invocación del proveedor, arranque incluido: la primera puede tardar
+  segundos. La burbuja muestra «Traduciendo…» y el resto del chat sigue usable.
+- Cambiar el comportamiento de la traducción es cambiar un archivo versionado (`translate.v1`), no código.
+- La suite cubre el adaptador con el subproceso simulado y la API con el doble de `LLM`; la traducción real
+  contra Pi se verifica a mano, como en F3.
+
+---
+
 ## Precedencia entre el documento y el wireframe
 
 Si el texto de `desing.md` y la imagen `grayscale_language_tutor_chat_ui.png` difieren: **manda el texto**.

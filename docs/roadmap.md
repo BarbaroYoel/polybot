@@ -1,6 +1,6 @@
 # Roadmap — Polybot
 
-Cada fase termina con algo verificable por un humano. Estado actual: **F2**.
+Cada fase termina con algo verificable por un humano. Estado actual: **F3.5 completada; siguiente: F4 (voz)**.
 
 ## F0 — Base documental
 
@@ -59,6 +59,19 @@ Alcance, decisiones y evidencia: `odd/tasks/f3-real-text-chat.md`.
 `npm run build` verdes, y turnos reales contra Pi en francés y en inglés: tokens, `message_end`, `correction` y
 `vocabulary`, con el feedback persistido y sin mezclar datos entre idiomas. Detalle y límites conocidos (arranque
 lento intermitente del proveedor, 60 s de presupuesto) en el documento de la fase.
+
+## F3.5 — Traducción de mensajes y fragmentos — **completada**
+
+Alcance, decisiones y evidencia: `odd/tasks/message-translation.md`. Decisión registrada: ADR-014.
+
+- [x] «Traducir» en un mensaje del tutor: traduce el mensaje completo, persistido, y sobrevive a la recarga.
+- [x] Con texto seleccionado dentro de la burbuja, traduce **solo esa selección**, sin guardarla, y cita el fragmento.
+- [x] `POST /translate` (fragmento, sin estado) y `POST /conversations/{id}/messages/{message_id}/translation`
+      (mensaje, persistido e idempotente), documentados en `docs/api-contract.md`.
+- [x] La dirección sale del perfil del idioma de la conversación, nunca del idioma activo global.
+
+**Verificación:** `uv run pytest` (123 passed), `ruff format --check`/`ruff check` limpios, `npm run typecheck` y
+`npm run build` verdes, más la traducción real contra el Pi local. Detalle en el documento de la feature.
 
 ## F4 — Voz
 
