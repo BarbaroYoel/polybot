@@ -1,7 +1,7 @@
 # Roadmap — Polybot
 
-Cada fase termina con algo verificable por un humano. Estado actual: **F4 (voz) completada; siguiente: F5
-(lecciones y planes de estudio)**.
+Cada fase termina con algo verificable por un humano. Estado actual: **F5 (lecciones y planes) en
+curso: catálogo y práctica hechos; faltan planes y la PWA**.
 
 ## F0 — Base documental
 
@@ -90,10 +90,14 @@ transcribir 2,81 s en frío / 0,19 s en caliente, turno del tutor 11,31 s con pr
 síntesis 0,32 s y caché en 0,00 s. La voz nunca reemplaza al texto: el transcripto se edita en el compositor.
 Detalle en `odd/tasks/f4-voice.md` L7.
 
-## F5 — Lecciones y planes de estudio
+## F5 — Lecciones y planes de estudio — **en curso** (rama `feat/f5-lessons-plans`)
 
-- Catálogo, lección con ejercicios, feedback y cierre.
-- Creación de plan a partir de un objetivo; sesiones con estado.
+Alcance, specs y evidencia: `odd/tasks/f5-lessons-plans.md`. Decisión registrada: ADR-017.
+
+- [x] Catálogo por idioma con la lección siguiente destacada y el estado de cada lección derivado de los intentos (`0ca0673`).
+- [x] Lección con ejercicios, corrección determinista, resultado con errores y vocabulario nuevo, y comentario del tutor best-effort (`0ca0673`).
+- [ ] Plan a partir de un objetivo, con cronograma por semanas y sesiones con estado.
+- [ ] PWA: catálogo, vista de lección y pantalla de plan.
 
 **Verificación:** completar una lección y ver el progreso reflejado.
 
