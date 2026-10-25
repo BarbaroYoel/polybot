@@ -8,11 +8,22 @@ import asyncio
 import logging
 from datetime import datetime
 from typing import Any
+from uuid import uuid4
 
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.adapters.db.models import ConversationRow, LanguageRow, MessageRow
+from app.adapters.db.lesson_content import CATALOG, TERMS
+from app.adapters.db.models import (
+    ConversationRow,
+    LanguageRow,
+    LessonExerciseAnswerRow,
+    LessonExerciseRow,
+    LessonRow,
+    LessonUnitRow,
+    LessonVocabularyRow,
+    MessageRow,
+)
 from app.adapters.db.session import create_engine, create_session_factory
 from app.core.config import Settings
 
@@ -151,11 +162,108 @@ def _add_conversation(
     return conversation
 
 
+async def _seed_lessons(session: AsyncSession) -> dict[str, int]:
+    """Insert the example lesson catalog of every seeded language that has none yet.
+
+    Independent from the language seed on purpose: a database created before F5 still gets its
+    catalog without being recreated, and a language added by hand simply has no catalog. Without
+    ORM relationships SQLAlchemy does not know the insert order between these tables, so the rows
+    are built level by level and each level is flushed before the next one references it.
+    """
+    counts = {"lessons": 0, "exercises": 0, "terms": 0}
+    for code, units in CATALOG.items():
+        language_id = await session.scalar(
+            select(LanguageRow.id).where(LanguageRow.code == code, LanguageRow.archived.is_(False))
+        )
+        if language_id is None:
+            continue
+        already = await session.scalar(
+            select(func.count())
+            .select_from(LessonUnitRow)
+            .where(LessonUnitRow.language_id == language_id)
+        )
+        if already:
+            continue
+
+        unit_rows: list[LessonUnitRow] = []
+        lesson_rows: list[LessonRow] = []
+        exercise_rows: list[LessonExerciseRow] = []
+        answer_rows: list[LessonExerciseAnswerRow] = []
+        term_rows: list[LessonVocabularyRow] = []
+
+        for unit_position, unit in enumerate(units):
+            unit_row = LessonUnitRow(
+                id=str(uuid4()),
+                language_id=language_id,
+                kind=unit.kind,
+                title=unit.title,
+                description=unit.description,
+                position=unit_position,
+            )
+            unit_rows.append(unit_row)
+            for lesson_position, lesson in enumerate(unit.lessons):
+                lesson_row = LessonRow(
+                    id=str(uuid4()),
+                    unit_id=unit_row.id,
+                    language_id=language_id,
+                    title=lesson.title,
+                    difficulty=lesson.difficulty,
+                    estimated_minutes=lesson.estimated_minutes,
+                    intro=lesson.intro,
+                    position=lesson_position,
+                )
+                lesson_rows.append(lesson_row)
+                for exercise_position, exercise in enumerate(lesson.exercises):
+                    exercise_row = LessonExerciseRow(
+                        id=str(uuid4()),
+                        lesson_id=lesson_row.id,
+                        position=exercise_position,
+                        prompt=exercise.prompt,
+                        explanation=exercise.explanation,
+                    )
+                    exercise_rows.append(exercise_row)
+                    answer_rows.extend(
+                        LessonExerciseAnswerRow(
+                            id=str(uuid4()),
+                            exercise_id=exercise_row.id,
+                            position=answer_position,
+                            answer=answer,
+                        )
+                        for answer_position, answer in enumerate(exercise.answers)
+                    )
+                    counts["exercises"] += 1
+                term_rows.extend(
+                    LessonVocabularyRow(
+                        id=str(uuid4()),
+                        lesson_id=lesson_row.id,
+                        position=term_position,
+                        term=term.term,
+                        translation=term.translation,
+                        note=term.note,
+                    )
+                    for term_position, term in enumerate(TERMS.get(lesson.title, ()))
+                )
+                counts["terms"] += len(TERMS.get(lesson.title, ()))
+                counts["lessons"] += 1
+
+        session.add_all(unit_rows)
+        await session.flush()
+        session.add_all(lesson_rows)
+        await session.flush()
+        session.add_all(exercise_rows)
+        await session.flush()
+        session.add_all([*answer_rows, *term_rows])
+        await session.flush()
+    return counts
+
+
 async def seed_example_data(session: AsyncSession) -> dict[str, int]:
-    """Insert the example languages, conversations and messages. Returns the inserted counts."""
+    """Insert the example languages, conversations, messages and lessons. Returns the counts."""
     existing = await session.scalar(select(func.count()).select_from(LanguageRow))
     if existing:
-        return {"languages": 0, "conversations": 0, "messages": 0}
+        summary = {"languages": 0, "conversations": 0, "messages": 0}
+        summary.update(await _seed_lessons(session))
+        return summary
 
     for language in _LANGUAGES:
         session.add(
@@ -190,11 +298,13 @@ async def seed_example_data(session: AsyncSession) -> dict[str, int]:
     )
 
     await session.flush()
-    return {
+    summary = {
         "languages": len(_LANGUAGES),
         "conversations": 2,
         "messages": len(_FRENCH_CAFE_MESSAGES) + len(_ENGLISH_ROUTINE_MESSAGES),
     }
+    summary.update(await _seed_lessons(session))
+    return summary
 
 
 async def main() -> None:
@@ -207,14 +317,14 @@ async def main() -> None:
     finally:
         await engine.dispose()
 
-    if summary["languages"]:
+    if summary["languages"] or summary["lessons"]:
         logger.info(
-            "Seeded %(languages)d languages, %(conversations)d conversations "
-            "and %(messages)d messages.",
+            "Seeded %(languages)d languages, %(conversations)d conversations, %(messages)d "
+            "messages, %(lessons)d lessons and %(exercises)d exercises.",
             summary,
         )
     else:
-        logger.info("The database already has languages; nothing was seeded.")
+        logger.info("The database already has the example data; nothing was seeded.")
 
 
 if __name__ == "__main__":

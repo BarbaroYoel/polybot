@@ -1,5 +1,6 @@
 """Pure domain entities (docs/architecture.md §3: `domain/` imports no infrastructure)."""
 
+from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import datetime
 from enum import StrEnum
@@ -107,3 +108,110 @@ class NewMessage:
     status: MessageStatus = MessageStatus.SENT
     translation: str | None = None
     idempotency_key: str | None = None
+
+
+class LessonUnitKind(StrEnum):
+    """The unit kinds of desing.md §6.2, in catalog order."""
+
+    VOCABULARY = "vocabulary"
+    GRAMMAR = "grammar"
+    PRONUNCIATION = "pronunciation"
+    LISTENING = "listening"
+    SITUATIONAL = "situational"
+
+
+class LessonStatus(StrEnum):
+    """Derived from the stored attempts, never set by hand (F5 S5).
+
+    `pending` means no attempt yet, `in_progress` an attempt with something still wrong and
+    `completed` an attempt where every answer was right.
+    """
+
+    PENDING = "pending"
+    IN_PROGRESS = "in_progress"
+    COMPLETED = "completed"
+
+
+@dataclass(frozen=True, slots=True)
+class LessonUnit:
+    id: str
+    language_id: str
+    kind: LessonUnitKind
+    title: str
+    description: str
+    position: int
+
+
+@dataclass(frozen=True, slots=True)
+class Lesson:
+    id: str
+    unit_id: str
+    language_id: str
+    title: str
+    difficulty: CefrLevel
+    estimated_minutes: int
+    intro: str
+    position: int
+
+
+@dataclass(frozen=True, slots=True)
+class LessonExercise:
+    """One activity: write the phrase in the practised language (F5 S8).
+
+    `accepted_answers` is ordered: the first one is what the API shows as the expected answer
+    when the student misses, and all of them are accepted by the deterministic comparison.
+    """
+
+    id: str
+    lesson_id: str
+    position: int
+    prompt: str
+    accepted_answers: Sequence[str]
+    explanation: str
+
+    @property
+    def expected(self) -> str:
+        return self.accepted_answers[0]
+
+
+@dataclass(frozen=True, slots=True)
+class LessonAnswer:
+    """One answer of one attempt, and whether the deterministic comparison accepted it."""
+
+    exercise_id: str
+    answer: str
+    correct: bool
+
+
+@dataclass(frozen=True, slots=True)
+class LessonAttempt:
+    """A finished practice of one lesson (F5 S2). Stored now so F6 can read it later (S7)."""
+
+    id: str
+    lesson_id: str
+    language_id: str
+    answers: Sequence[LessonAnswer]
+    feedback: str | None
+    created_at: datetime
+
+    @property
+    def correct(self) -> int:
+        return sum(1 for answer in self.answers if answer.correct)
+
+    @property
+    def total(self) -> int:
+        return len(self.answers)
+
+    @property
+    def completed(self) -> bool:
+        """A lesson is done when nothing is left wrong: no invented score threshold (S5)."""
+        return self.total > 0 and self.correct == self.total
+
+
+@dataclass(frozen=True, slots=True)
+class LessonTerm:
+    """One key term of a lesson, returned as the «vocabulario nuevo» of its result (S2)."""
+
+    term: str
+    translation: str
+    note: str | None

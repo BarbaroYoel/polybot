@@ -67,3 +67,15 @@ class TtsUnavailable(DomainError):
 
 class SpeechNotFound(DomainError):
     """The synthesized clip is not in the cache: it has to be generated again (F4)."""
+
+
+class LessonNotFound(DomainError):
+    """The lesson does not exist or belongs to another language (F5 S6)."""
+
+
+class NoLessonsForLanguage(DomainError):
+    """The language has no catalog: the UI shows an empty state, not an invented lesson (S5)."""
+
+
+class MissingLessonAnswers(DomainError):
+    """A submit that does not answer every exercise of the lesson (F5 S7)."""

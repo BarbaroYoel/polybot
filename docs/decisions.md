@@ -323,6 +323,42 @@ la descarga desde `files.pythonhosted.org` se corta desde esta máquina. El bina
   `tts_unavailable` con un mensaje accionable y el resto de la app funciona igual.
 - El "streaming por frases" de ADR-003 queda como un proceso por frase, encadenado en el adaptador.
 
+---
+
+## ADR-017 — Las lecciones son catálogo sembrado y la corrección es determinista
+
+**Estado:** aceptada · **Fecha:** 2026-10-23 · **Decide:** F5, tareas T1–T2
+
+**Contexto.** `desing.md` §6.2 pide catálogo de unidades, práctica interactiva y feedback del
+tutor; §13 deja la *generación* de lecciones para después de la base. Un catálogo generado por el
+modelo no es estable entre idiomas ni testeable: el mismo pedido devuelve otro contenido, y sin
+contenido fijo no hay corrección que se pueda afirmar.
+
+**Decisión.**
+
+1. La v0 sirve un **catálogo de datos sembrados por idioma** (`app/adapters/db/lesson_content.py`
+   más el seed idempotente): unidades, lecciones, ejercicios, respuestas aceptadas y vocabulario.
+   Un idioma sin catálogo muestra el estado vacío con su motivo, nunca una lección inventada.
+2. La práctica de v0 es **producir texto en el idioma practicado**, corregido de forma
+   **determinista**: se comparan las respuestas sin mayúsculas, sin acentos y sin puntuación. El
+   primer idioma aceptado de cada ejercicio es el que se muestra como respuesta esperada.
+3. El proveedor del tutor escribe **solo el comentario de cierre**, en el idioma de explicación del
+   perfil, y es **best-effort**: si falla, la lección se corrige igual y el comentario queda `null`.
+4. Cada intento se persiste con sus respuestas (`lesson_attempts`, `lesson_attempt_answers`) aunque
+   `GET /progress` sea F6: el estado de cada sesión y el progreso futuro se derivan de intentos
+   reales, no de un contador inventado por la UI.
+5. El estado de una lección se **deriva**: `pending` sin intentos, `in_progress` con un intento que
+   dejó algo mal, `completed` con un intento sin errores. Ningún endpoint cambia ese estado a mano.
+
+**Consecuencias.**
+
+- Agregar lecciones es editar datos y volver a sembrar, no tocar código.
+- La corrección no depende de la latencia ni del criterio del modelo: la suite la cubre sin red.
+- Ampliar la práctica a otros tipos de ejercicio (elección múltiple, audio) es una decisión nueva:
+  este ADR fija el tipo de la v0, no el definitivo.
+- El contenido sembrado es de ejemplo y está marcado como tal: no es currículo validado por un
+  docente.
+
 ## Precedencia entre el documento y el wireframe
 
 Si el texto de `desing.md` y la imagen `grayscale_language_tutor_chat_ui.png` difieren: **manda el texto**.

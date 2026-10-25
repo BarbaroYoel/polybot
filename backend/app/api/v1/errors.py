@@ -17,9 +17,11 @@ from app.domain.errors import (
     LanguageAlreadyExists,
     LanguageNotFound,
     LastLanguageCannotBeArchived,
+    LessonNotFound,
     LlmTimeout,
     LlmUnavailable,
     MessageNotFound,
+    MissingLessonAnswers,
     SpeechNotFound,
     SttUnavailable,
     TtsUnavailable,
@@ -56,6 +58,16 @@ _DOMAIN_ERRORS: dict[type[DomainError], tuple[int, str, str]] = {
         504,
         "llm_timeout",
         "El tutor tardó demasiado en responder. Vuelve a intentar.",
+    ),
+    LessonNotFound: (
+        404,
+        "lesson_not_found",
+        "Esa lección no existe o pertenece a otro idioma.",
+    ),
+    MissingLessonAnswers: (
+        422,
+        "missing_lesson_answers",
+        "Respondé todos los ejercicios de la lección antes de terminarla.",
     ),
     LanguageAlreadyExists: (
         409,

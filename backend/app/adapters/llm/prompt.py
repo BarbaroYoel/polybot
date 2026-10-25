@@ -17,6 +17,7 @@ from pathlib import Path
 from string import Template
 
 from app.ports.llm import (
+    LessonReviewRequest,
     TranslationRequest,
     TurnMessage,
     TutorContext,
@@ -26,6 +27,7 @@ from app.ports.llm import (
 PROMPT_VERSION = "tutor.v1"
 PROMPT_VERSION_FEEDBACK = "feedback.v1"
 PROMPT_VERSION_TRANSLATION = "translate.v1"
+PROMPT_VERSION_LESSON_REVIEW = "lesson-review.v1"
 
 _PROMPTS_DIR = Path(__file__).resolve().parent / "prompts"
 _NO_HISTORY = "(todavía no hay mensajes)"
@@ -135,6 +137,50 @@ class TranslationPrompt:
 
     def render_turn(self, request: TranslationRequest) -> str:
         return Template(self.turn).substitute(text=request.text)
+
+
+@dataclass(frozen=True, slots=True)
+class LessonReviewPrompt:
+    """The lesson-review prompt: the lesson result in the turn, the context in the system side."""
+
+    system: str
+    turn: str
+
+    @classmethod
+    def load(cls, version: str = PROMPT_VERSION_LESSON_REVIEW) -> "LessonReviewPrompt":
+        if not version.startswith("lesson-review."):
+            raise ValueError(f"unexpected prompt version: {version}")
+        suffix = version.removeprefix("lesson-review.")
+        text = (_PROMPTS_DIR / f"lesson-review.{suffix}.md").read_text(encoding="utf-8")
+        system, _, turn = text.partition(_TURN_MARKER)
+        if not turn.strip():
+            raise ValueError(f"{version} has no turn template after {_TURN_MARKER}")
+        return cls(system=f"{system.strip()}\n", turn=f"{turn.strip()}\n")
+
+    def render_system(self, context: TutorContext) -> str:
+        return Template(self.system).substitute(
+            language_name=context.language_name,
+            language_code=context.language_code,
+            level=context.level.value,
+            explanation_language=context.explanation_language,
+        )
+
+    def render_turn(self, request: LessonReviewRequest) -> str:
+        return Template(self.turn).substitute(
+            lesson_title=request.lesson_title,
+            correct=request.correct,
+            total=request.total,
+            items=_render_review_items(request),
+        )
+
+
+def _render_review_items(request: LessonReviewRequest) -> str:
+    """One line per exercise: what was asked, what the student wrote and whether it was right."""
+    lines = []
+    for item in request.items:
+        verdict = "correcta" if item.correct else f"incorrecta, se esperaba «{item.expected}»"
+        lines.append(f"- {item.prompt} → «{item.answer}»: {verdict}")
+    return "\n".join(lines)
 
 
 def _render_source(source_language: str | None) -> str:
