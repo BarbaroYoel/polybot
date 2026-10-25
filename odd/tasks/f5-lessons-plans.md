@@ -65,7 +65,7 @@ idioma de explicación del perfil del idioma.
 |---|---|---|---|
 | T1 | S1, S6, S8 | Unidades, lecciones y ejercicios en el dominio + esquema + seed por idioma + `GET /lessons?language_id=` | `0ca0673` |
 | T2 | S2, S7, S8 | `GET /lessons/{id}` + `POST /lessons/{id}/submit`: corrección determinista, intento persistido, comentario del tutor best-effort | `0ca0673` (mismo commit que T1) |
-| T3 | S3, S4, S6 | Planes: dominio, esquema, `GET /plans?language_id=`, `POST /plans`, `PATCH /plans/{id}` con cronograma por semanas y estados derivados | en curso |
+| T3 | S3, S4, S6 | Planes: dominio, esquema, `GET /plans?language_id=`, `POST /plans`, `PATCH /plans/{id}` con cronograma por semanas y estados derivados | `bf2dca7` |
 | T4 | S1, S2, S3, S5 | PWA: catálogo de lecciones, vista de lección con práctica y resultado, pantalla de plan con sesiones | pendiente |
 | T5 | todas | Checks de la fase, verificación en navegador contra la API real y documentación (contrato, roadmap, decisiones) | pendiente |
 
@@ -96,3 +96,22 @@ intermedio: comparten migración, repositorio, servicio y archivo de tests, y el
 estado de los intentos que crea el submit. Se commitearon juntos en `0ca0673`; F3.5 y F4 quedaron en
 `636c0eb` y `5b647f6`. El ADR-017 estaba citado en tres lugares (S8, este log y
 `lesson_content.py`) y no existía en `docs/decisions.md`: se escribió en el mismo commit.
+
+**L4 — T3 cerrado: lo que se verificó y lo que queda anotado.** Escrito test-first: los 10 tests de
+`backend/tests/integration/test_plans_api.py` se vieron fallar (10 failed) antes de la primera línea
+de implementación, y pasan (10 passed) con la suite completa en **201 passed**, `ruff format`/`ruff
+check` limpios en todo el proyecto y la migración `c4e7b1a9d3f2` probada con `alembic upgrade head` y
+`downgrade -1` sobre una base aparte. Límites conocidos, no silenciosos:
+
+1. **Carrera al crear dos planes del mismo idioma**: el 409 sale del chequeo del servicio; la
+   restricción `UNIQUE` es la red de contención, pero el adaptador no traduce un `IntegrityError`,
+   así que una carrera real daría 500 `internal_error`. v0 es de un solo usuario y no tiene postura
+   de concurrencia; queda anotado, no resuelto.
+2. `PlanSessionState` repite los tres valores de `LessonStatus` a propósito: el estado de una sesión
+   es vocabulario del plan, no de la lección. Si un revisor prefiere reusar `LessonStatus`, es un
+   cambio de una línea.
+3. `docs/api-contract.md` §1 no listaba `lesson_not_found` ni `missing_lesson_answers` de T1/T2: se
+   agregaron en el commit de T3.
+4. El archivo de tests de planes se formateó con `ruff format` después de escribirlo (solo saltos de
+   línea; el hash del AST es idéntico antes y después), porque el gate de lint del proyecto es
+   global y no hay excepciones por archivo.
