@@ -1,7 +1,7 @@
 # Roadmap — Polybot
 
 Cada fase termina con algo verificable por un humano. Estado actual: **F5 (lecciones y planes) en
-curso: catálogo y práctica hechos; faltan planes y la PWA**.
+curso: catálogo, práctica y planes hechos en el backend; falta la PWA**.
 
 ## F0 — Base documental
 
@@ -96,7 +96,7 @@ Alcance, specs y evidencia: `odd/tasks/f5-lessons-plans.md`. Decisión registrad
 
 - [x] Catálogo por idioma con la lección siguiente destacada y el estado de cada lección derivado de los intentos (`0ca0673`).
 - [x] Lección con ejercicios, corrección determinista, resultado con errores y vocabulario nuevo, y comentario del tutor best-effort (`0ca0673`).
-- [ ] Plan a partir de un objetivo, con cronograma por semanas y sesiones con estado.
+- [x] Plan a partir de un objetivo, con cronograma por semanas, sesiones con estado derivado de los intentos y ajuste explícito del usuario (`bf2dca7`).
 - [ ] PWA: catálogo, vista de lección y pantalla de plan.
 
 **Verificación:** completar una lección y ver el progreso reflejado.
