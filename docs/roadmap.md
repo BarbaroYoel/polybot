@@ -1,7 +1,8 @@
 # Roadmap — Polybot
 
-Cada fase termina con algo verificable por un humano. Estado actual: **F5 (lecciones y planes) en
-curso: catálogo, práctica y planes hechos en el backend; falta la PWA**.
+Cada fase termina con algo verificable por un humano. Estado actual: **F5 (lecciones y planes)
+completada** en su rama (`8ba8964`, `00d8dcb`), entregada como cadena de PRs sobre esa rama. F6 y F7
+pendientes.
 
 ## F0 — Base documental
 
@@ -90,16 +91,37 @@ transcribir 2,81 s en frío / 0,19 s en caliente, turno del tutor 11,31 s con pr
 síntesis 0,32 s y caché en 0,00 s. La voz nunca reemplaza al texto: el transcripto se edita en el compositor.
 Detalle en `odd/tasks/f4-voice.md` L7.
 
-## F5 — Lecciones y planes de estudio — **en curso** (rama `feat/f5-lessons-plans`)
+## F5 — Lecciones y planes de estudio — **completada** (rama `feat/f5-lessons-plans`: `8ba8964`, `00d8dcb`)
 
 Alcance, specs y evidencia: `odd/tasks/f5-lessons-plans.md`. Decisión registrada: ADR-017.
 
 - [x] Catálogo por idioma con la lección siguiente destacada y el estado de cada lección derivado de los intentos (`0ca0673`).
 - [x] Lección con ejercicios, corrección determinista, resultado con errores y vocabulario nuevo, y comentario del tutor best-effort (`0ca0673`).
 - [x] Plan a partir de un objetivo, con cronograma por semanas, sesiones con estado derivado de los intentos y ajuste explícito del usuario (`bf2dca7`).
-- [ ] PWA: catálogo, vista de lección y pantalla de plan.
+- [x] PWA: catálogo, vista de lección y pantalla de plan.
 
-**Verificación:** completar una lección y ver el progreso reflejado.
+**Verificación T4:** `npm run typecheck` y `npm run build` verdes; `uv run pytest` 201 passed.
+El agente reportó catálogo, intentos y planes reales, aislamiento por idioma y ausencia de overflow
+a 375×812 y 1280×900; el orquestador repitió typecheck con exit 0.
+
+**Verificación T5:** `uv run pytest` **203 passed**, `uv run ruff check` y `ruff format --check`
+limpios, `npm run typecheck` y `npm run build` verdes. Una verificación independiente, sobre una
+copia aislada y su propia base migrada y sembrada, confirmó los tres puntos pedidos:
+
+1. Con `PI_BIN_PATH` apuntando a un binario inexistente, `POST /lessons/{id}/submit` devuelve 200
+   con 3/3, el intento persistido, `feedback: null` y el catálogo del idioma avanzado; en francés
+   todo sigue `pending`. El chat responde `llm_unavailable` por SSE y la traducción 502
+   `llm_unavailable`, sin 500.
+2. Las listas de lecciones, ejercicios, semanas y sesiones muestran una sola numeración, con
+   `list-style: none` y sin marcador nativo, a 375×812 y 1280×900, sin desborde horizontal.
+3. El adaptador de Pi conserva flags de aislamiento, presupuesto de tiempo, directorio temporal y
+   cancelación; las suites de chat, cierre de turno y traducción siguen en verde.
+
+**Límites conocidos:** dos planes del mismo idioma creados en carrera pueden responder 500 en vez
+de 409 (v0 de un solo usuario, anotado en `odd/tasks/f5-lessons-plans.md` L4); el frontend no tiene
+suite de tests porque el stack de testing sigue sin decidirse (`docs/stack.md`); el slice de la PWA
+suma 2.466 líneas y no se puede partir sin romper el build, así que se entrega como cadena de PRs
+sobre la rama.
 
 ## F6 — Progreso
 

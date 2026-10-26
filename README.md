@@ -4,13 +4,16 @@ PWA de tutor de idiomas guiada por IA, centrada en el chat, con la voz como capa
 clase. Un solo idioma activo a la vez; conversaciones, lecciones, planes y progreso aislados por
 idioma.
 
-**Estado:** F4 (voz) completada y F5 (lecciones y planes) en curso. La fuente de verdad del avance y
-de la evidencia de cada fase es [`docs/roadmap.md`](./docs/roadmap.md); el detalle tarea por tarea
-está en [`odd/tasks/`](./odd/tasks).
+**Estado:** F4 (voz) completada; F5 (lecciones y planes) completada en la rama
+`feat/f5-lessons-plans` (`8ba8964`, `00d8dcb`). La fuente de verdad del avance y de la evidencia de
+cada fase es [`docs/roadmap.md`](./docs/roadmap.md); el detalle tarea por tarea está en
+[`odd/tasks/`](./odd/tasks).
 
 Lo que ya funciona de punta a punta: la PWA lee idiomas y conversaciones de la API, conversa con el
 tutor en tiempo real por SSE, pide correcciones y vocabulario al cerrar cada turno, traduce un mensaje
-o un fragmento seleccionado, y transcribe y reproduce voz con motores locales.
+o un fragmento seleccionado, transcribe y reproduce voz con motores locales, y completa lecciones con
+corrección determinista, errores, vocabulario y planes de estudio por semanas con el estado de cada
+sesión derivado de los intentos.
 
 ## Requisitos
 
@@ -18,7 +21,7 @@ o un fragmento seleccionado, y transcribe y reproduce voz con motores locales.
 |---|---|---|
 | Python 3.13 + [uv](https://docs.astral.sh/uv/) | backend | `uv sync` instala todo |
 | Node 20+ | frontend | solo el frontend |
-| [Pi](https://github.com/badlogic/pi) en el `PATH` | el tutor es una instancia de Pi por turno (ADR-013) | sin Pi: `llm_unavailable`, el resto de la app anda igual |
+| [Pi](https://github.com/badlogic/pi) en el `PATH` | el tutor es una instancia de Pi por turno (ADR-013) | sin Pi en el `PATH`, el chat y la traducción responden `llm_unavailable`, y la lección se corrige igual sin comentario; idiomas, catálogo y planes siguen funcionando |
 | Piper (binario) + voces | audio de salida (ADR-016) | opcional: sin él, `/voice/speech` responde `tts_unavailable` |
 | `cactus-needle` | audio de entrada, modelo Whistle (ADR-015) | entra por `uv sync`; el modelo se baja con el primer uso |
 
