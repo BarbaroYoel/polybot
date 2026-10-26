@@ -5,15 +5,16 @@ import { AppShell } from "../components/AppShell";
 import { ErrorState, LoadingState } from "../components/States";
 import { LanguageProvider } from "../lib/language";
 import {
-  LessonsPage,
   NotFoundPage,
-  PlansPage,
   ProgressPage,
   SettingsPage,
   TranslatePage,
 } from "../features/sections/pages";
 import { HomePage } from "../features/home/HomePage";
 import { LanguagesPage } from "../features/languages/LanguagesPage";
+import { LessonPage } from "../features/lessons/LessonPage";
+import { LessonsPage } from "../features/lessons/LessonsPage";
+import { PlansPage } from "../features/plans/PlansPage";
 
 const ChatPage = lazy(async () => {
   const module = await import("../features/chat/ChatPage");
@@ -76,6 +77,7 @@ export function App() {
                 }
               />
               <Route path="lessons" element={<LessonsPage />} />
+              <Route path="lessons/:lessonId" element={<LessonPage />} />
               <Route path="plans" element={<PlansPage />} />
               <Route path="translate" element={<TranslatePage />} />
               <Route path="progress" element={<ProgressPage />} />

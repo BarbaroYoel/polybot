@@ -6,14 +6,17 @@ import { EmptyState, ErrorState, LoadingState } from "../../components/States";
 import { SummaryCard } from "../../components/SummaryCard";
 import { errorMessage } from "../../lib/api/client";
 import { createConversation, listConversations } from "../../lib/api/conversations";
-import type { Conversation, ConversationPage } from "../../lib/api/types";
-import { EXAMPLE_DATA } from "../../lib/fixtures";
+import { getLessonCatalog } from "../../lib/api/lessons";
+import { getPlan } from "../../lib/api/plans";
+import type {
+  Conversation,
+  ConversationPage,
+  LanguagePlan,
+  LessonCatalog,
+} from "../../lib/api/types";
 import { useActiveLanguage } from "../../lib/language";
 import { useAsync } from "../../lib/useAsync";
 import "./home.css";
-
-const EXAMPLE_NOTICE =
-  "Datos de ejemplo solo en las secciones Lecciones, Planes de estudio, Traducción y Progreso. Las conversaciones y los idiomas ya se leen del backend.";
 
 /** Upper bound of the contract (docs/api-contract.md §5): the history asks for the maximum page. */
 const HISTORY_LIMIT = 50;
@@ -45,6 +48,19 @@ function conversationMeta(conversation: Conversation): string {
     : `${messagesLabel(conversation.message_count)} · sin mensajes todavía`;
 }
 
+/** Lesson totals of the catalog, derived from the states the API returned (F5 S5). */
+function lessonTotals(catalog: LessonCatalog): { total: number; completed: number } {
+  let total = 0;
+  let completed = 0;
+  for (const unit of catalog.units) {
+    for (const lesson of unit.lessons) {
+      total += 1;
+      if (lesson.status === "completed") completed += 1;
+    }
+  }
+  return { total, completed };
+}
+
 /**
  * Home screen (desing.md §6.1, ADR-011): summary cards and the real conversation history of the
  * active language. A conversation lives at `/chat/:id`.
@@ -59,6 +75,15 @@ export function HomePage() {
   const navigate = useNavigate();
   const history = useAsync(
     () => (active ? listConversations(active.id, { limit: HISTORY_LIMIT }) : Promise.resolve(EMPTY_PAGE)),
+    [active?.id],
+  );
+  // F5 entries: the next lesson and the next plan session are real, not sample values.
+  const catalog = useAsync<LessonCatalog | null>(
+    () => (active ? getLessonCatalog(active.id) : Promise.resolve(null)),
+    [active?.id],
+  );
+  const plan = useAsync<LanguagePlan | null>(
+    () => (active ? getPlan(active.id) : Promise.resolve(null)),
     [active?.id],
   );
   const [creating, setCreating] = useState(false);
@@ -78,6 +103,185 @@ export function HomePage() {
     } finally {
       setCreating(false);
     }
+  };
+
+  const renderLessonCard = () => {
+    if (!active) {
+      return (
+        <SummaryCard
+          icon="book"
+          title="Lección de hoy"
+          meta="Activa un idioma para ver su catálogo de lecciones."
+        />
+      );
+    }
+
+    if (catalog.status === "loading") {
+      return (
+        <SummaryCard
+          icon="book"
+          title="Lección de hoy"
+          meta={`Cargando el catálogo en ${active.name}…`}
+        />
+      );
+    }
+
+    if (catalog.status === "error") {
+      return (
+        <SummaryCard
+          icon="book"
+          title="Lección de hoy"
+          meta="No pudimos cargar la lección de hoy."
+          actionLabel="Reintentar"
+          onAction={catalog.reload}
+        />
+      );
+    }
+
+    const data = catalog.data;
+    if (!data) {
+      return (
+        <SummaryCard
+          icon="book"
+          title="Lección de hoy"
+          meta="Este idioma todavía no tiene lecciones."
+          actionLabel="Ver lecciones"
+          onAction={() => navigate("/lessons")}
+        />
+      );
+    }
+
+    const totals = lessonTotals(data);
+    const next = data.next_lesson;
+
+    if (!next) {
+      return (
+        <SummaryCard
+          icon="book"
+          title="Lección de hoy"
+          meta={
+            totals.total === 0
+              ? "Este idioma todavía no tiene lecciones."
+              : "Completaste todas las lecciones de este catálogo."
+          }
+          actionLabel="Ver lecciones"
+          onAction={() => navigate("/lessons")}
+        />
+      );
+    }
+
+    return (
+      <SummaryCard
+        icon="book"
+        title="Lección de hoy"
+        meta={`${next.title} · ${next.difficulty} · ${next.estimated_minutes} min`}
+        progress={totals.total > 0 ? { current: totals.completed, total: totals.total } : undefined}
+        actionLabel={next.status === "in_progress" ? "Retomar" : "Continuar"}
+        onAction={() => navigate(`/lessons/${next.id}`)}
+      />
+    );
+  };
+
+  const renderGoalCard = () => {
+    if (!active) {
+      return (
+        <SummaryCard
+          icon="target"
+          title="Meta semanal"
+          meta="Activa un idioma para ver su meta."
+        />
+      );
+    }
+
+    return (
+      <SummaryCard
+        icon="target"
+        title="Meta semanal"
+        meta={`${active.weekly_goal.conversations} conversaciones y ${active.weekly_goal.minutes} min por semana. El avance llega con Progreso (F6).`}
+      />
+    );
+  };
+
+  const renderPlanCard = () => {
+    if (!active) {
+      return (
+        <SummaryCard
+          icon="calendar"
+          title="Próxima sesión"
+          meta="Activa un idioma para ver su plan de estudio."
+        />
+      );
+    }
+
+    if (plan.status === "loading") {
+      return (
+        <SummaryCard
+          icon="calendar"
+          title="Próxima sesión"
+          meta={`Cargando el plan en ${active.name}…`}
+        />
+      );
+    }
+
+    if (plan.status === "error") {
+      return (
+        <SummaryCard
+          icon="calendar"
+          title="Próxima sesión"
+          meta="No pudimos cargar el plan de estudio."
+          actionLabel="Reintentar"
+          onAction={plan.reload}
+        />
+      );
+    }
+
+    const value = plan.data?.plan ?? null;
+    if (!value) {
+      return (
+        <SummaryCard
+          icon="calendar"
+          title="Próxima sesión"
+          meta="Todavía no hay un plan de estudio para este idioma."
+          actionLabel="Crear plan"
+          onAction={() => navigate("/plans")}
+        />
+      );
+    }
+
+    const next = value.next_session;
+    if (value.sessions.length === 0) {
+      return (
+        <SummaryCard
+          icon="calendar"
+          title="Próxima sesión"
+          meta="El plan todavía no tiene sesiones: el catálogo del idioma no tiene lecciones."
+          actionLabel="Ver plan"
+          onAction={() => navigate("/plans")}
+        />
+      );
+    }
+
+    if (!next) {
+      return (
+        <SummaryCard
+          icon="calendar"
+          title="Próxima sesión"
+          meta="Todas las sesiones del plan están completadas."
+          actionLabel="Ver plan"
+          onAction={() => navigate("/plans")}
+        />
+      );
+    }
+
+    return (
+      <SummaryCard
+        icon="calendar"
+        title="Próxima sesión"
+        meta={`Semana ${next.week} · ${next.lesson_title}`}
+        actionLabel="Abrir"
+        onAction={() => navigate(`/lessons/${next.lesson_id}`)}
+      />
+    );
   };
 
   const renderHistory = () => {
@@ -167,30 +371,10 @@ export function HomePage() {
   return (
     <div className="home">
       <div className="home__summaries">
-        <SummaryCard
-          icon="book"
-          title="Lección de hoy"
-          meta="Vocabulario en situaciones cotidianas"
-          progress={{ current: 3, total: 5 }}
-          actionLabel="Continuar"
-          actionTitle="Las lecciones llegan en F5"
-        />
-        <SummaryCard
-          icon="target"
-          title="Meta semanal"
-          meta="4 de 7 conversaciones"
-          dots={{ current: 4, total: 7 }}
-        />
-        <SummaryCard
-          icon="calendar"
-          title="Próxima práctica"
-          meta="Hoy, 17:00 · Conversación: en un café"
-          actionLabel="Abrir"
-          actionTitle="La planificación llega en F5"
-        />
+        {renderLessonCard()}
+        {renderGoalCard()}
+        {renderPlanCard()}
       </div>
-
-      {EXAMPLE_DATA && <Notice>{EXAMPLE_NOTICE}</Notice>}
 
       <section className="home__history" aria-labelledby={headingId}>
         <div className="home__history-head">
