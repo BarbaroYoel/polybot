@@ -4,11 +4,20 @@ The catalog is the seeded example content, so these tests do not hardcode lesson
 them from the API, which is also what the PWA does.
 """
 
+import tempfile
+from collections.abc import Iterator
+from pathlib import Path
+
+import pytest
 from fastapi.testclient import TestClient
 
 from app.adapters.db.seed import LANGUAGE_ALEMAN, LANGUAGE_FRANCES, LANGUAGE_INGLES
+from app.adapters.llm.pi import PiCliAdapter
+from app.core.dependencies import get_llm
 from app.domain.errors import LlmUnavailable
 from tests.fakes.llm import FakeLlm
+
+MISSING_PI = str(Path(tempfile.gettempdir()) / "polybot-pi-does-not-exist")
 
 
 def _catalog(client: TestClient, language_id: str) -> dict:
@@ -33,6 +42,18 @@ def _detail(client: TestClient, lesson_id: str) -> dict:
     response = client.get(f"/api/v1/lessons/{lesson_id}")
     assert response.status_code == 200, response.text
     return response.json()
+
+
+@pytest.fixture
+def client_without_pi(api_client: TestClient) -> Iterator[TestClient]:
+    """The same app and database, with the real adapter aimed at an absent executable.
+
+    `raise_server_exceptions=False` so an unhandled failure reaches the test as the 500 a browser
+    would receive instead of a traceback; the provider still runs for real.
+    """
+    api_client.app.dependency_overrides[get_llm] = lambda: PiCliAdapter(command=[MISSING_PI])
+    with TestClient(api_client.app, raise_server_exceptions=False) as client:
+        yield client
 
 
 def _submit(client: TestClient, lesson_id: str, answers: dict[str, str]) -> dict:
@@ -285,6 +306,44 @@ def test_a_provider_failure_keeps_the_result_without_a_comment(
         for lesson in unit["lessons"]
     ]
     assert "completed" in statuses, "the attempt was stored anyway"
+
+
+def test_a_missing_pi_executable_still_grades_the_lesson(
+    api_client: TestClient, client_without_pi: TestClient
+) -> None:
+    """The real adapter against a binary that is not there: a provider failure, not a 500 (S8).
+
+    The comment is best-effort, so a tutor that cannot even start must leave the deterministic
+    grade and the stored attempt untouched instead of failing the whole submit.
+    """
+    lesson = _first_lesson(client_without_pi, LANGUAGE_INGLES)
+    detail = _detail(client_without_pi, lesson["id"])
+    answers = {
+        detail["exercises"][0]["id"]: "I'd like a coffee, please",
+        detail["exercises"][1]["id"]: "Could you bring me the bill, please?",
+        detail["exercises"][2]["id"]: "to take away please",
+    }
+
+    response = client_without_pi.post(
+        f"/api/v1/lessons/{lesson['id']}/submit",
+        json={"answers": [{"exercise_id": key, "answer": value} for key, value in answers.items()]},
+    )
+
+    assert response.status_code == 200, response.text
+    result = response.json()
+    assert (result["correct"], result["total"]) == (3, 3)
+    assert result["completed"] is True
+    assert result["feedback"] is None, "no tutor, no comment: the grade is still a grade"
+    assert result["next_lesson"]["title"] == "Pagar y dejar propina"
+    # The attempt survived: the public catalog is the only place this test reads it back from.
+    assert _catalog(api_client, LANGUAGE_INGLES)["units"][0]["lessons"][0]["status"] == (
+        "completed"
+    )
+    assert all(
+        entry["status"] == "pending"
+        for unit in _catalog(api_client, LANGUAGE_FRANCES)["units"]
+        for entry in unit["lessons"]
+    ), "the attempt belongs to one language only"
 
 
 def test_submitting_an_unknown_lesson_is_a_not_found(api_client: TestClient) -> None:

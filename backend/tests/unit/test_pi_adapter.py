@@ -17,7 +17,13 @@ import pytest
 from app.adapters.llm.pi import PiCliAdapter
 from app.domain.entities import CefrLevel, MessageAuthor
 from app.domain.errors import LlmTimeout, LlmUnavailable
-from app.ports.llm import TurnMessage, TutorContext, TutorTurn
+from app.ports.llm import (
+    LessonReviewItem,
+    LessonReviewRequest,
+    TurnMessage,
+    TutorContext,
+    TutorTurn,
+)
 
 FAKE_PI = Path(__file__).resolve().parents[1] / "fixtures" / "fake_pi.py"
 
@@ -135,6 +141,30 @@ def test_a_malformed_record_is_reported_instead_of_silently_dropped(
 
     with pytest.raises(LlmUnavailable):
         collect(adapter)
+
+
+def test_a_missing_executable_is_a_provider_failure() -> None:
+    # A binary that is not installed must read as «the tutor failed», never as a bug in the API:
+    # every caller already degrades on LlmUnavailable (F5, best-effort lesson comment).
+    adapter = PiCliAdapter(command=["/nonexistent/polybot-pi"])
+
+    with pytest.raises(LlmUnavailable):
+        collect(adapter)
+
+    request = LessonReviewRequest(
+        context=make_turn().context,
+        lesson_title="Pedir algo en un café",
+        items=[
+            LessonReviewItem(
+                prompt="Pedir un café",
+                answer="I'd like a coffee",
+                expected="I'd like a coffee",
+                correct=True,
+            )
+        ],
+    )
+    with pytest.raises(LlmUnavailable):
+        asyncio.run(adapter.review_lesson(request))
 
 
 def test_an_empty_reply_is_reported_as_failure(monkeypatch: pytest.MonkeyPatch) -> None:
