@@ -116,3 +116,125 @@ export interface MessagePage {
 export interface ConversationDetail extends Conversation {
   messages: MessagePage;
 }
+
+// F5 — lessons and study plans (docs/api-contract.md §3 "Aprendizaje").
+
+/** State of a lesson or of a plan session, always derived from the stored attempts (F5 S5). */
+export type LessonStatus = "pending" | "in_progress" | "completed";
+
+/** The unit kinds of desing.md §6.2, in catalog order. */
+export type LessonUnitKind =
+  | "vocabulary"
+  | "grammar"
+  | "pronunciation"
+  | "listening"
+  | "situational";
+
+/** One lesson as the catalog lists it. The accepted answers never reach the client (F5 S8). */
+export interface LessonSummary {
+  id: string;
+  unit_id: string;
+  title: string;
+  difficulty: CefrLevel;
+  estimated_minutes: number;
+  position: number;
+  status: LessonStatus;
+}
+
+export interface LessonUnit {
+  id: string;
+  kind: LessonUnitKind;
+  title: string;
+  description: string;
+  position: number;
+  lessons: LessonSummary[];
+}
+
+/** `GET /lessons?language_id=`: units of one language plus the lesson «Continuar aprendiendo». */
+export interface LessonCatalog {
+  language_id: string;
+  language_name: string;
+  level: CefrLevel;
+  next_lesson: LessonSummary | null;
+  units: LessonUnit[];
+}
+
+export interface LessonExercise {
+  id: string;
+  position: number;
+  prompt: string;
+}
+
+/** `GET /lessons/{id}`: the lesson text and its prompts, never the accepted answers. */
+export interface LessonDetail {
+  id: string;
+  language_id: string;
+  unit_id: string;
+  unit_title: string;
+  unit_kind: LessonUnitKind;
+  title: string;
+  difficulty: CefrLevel;
+  estimated_minutes: number;
+  intro: string;
+  exercises: LessonExercise[];
+}
+
+/** One wrong answer of a submitted attempt, with what was expected and why (F5 S2). */
+export interface LessonMistake {
+  exercise_id: string;
+  prompt: string;
+  answer: string;
+  expected: string;
+  explanation: string;
+}
+
+export interface LessonTerm {
+  term: string;
+  translation: string;
+  note: string | null;
+}
+
+/** `POST /lessons/{id}/submit`: the graded attempt, its mistakes and the next recommendation. */
+export interface LessonResult {
+  attempt_id: string;
+  lesson_id: string;
+  correct: number;
+  total: number;
+  completed: boolean;
+  mistakes: LessonMistake[];
+  vocabulary: LessonTerm[];
+  feedback: string | null;
+  next_lesson: LessonSummary | null;
+}
+
+export type PlanSessionState = "pending" | "in_progress" | "completed";
+
+/** One session of the schedule. Its state is read-only: no endpoint changes it by hand. */
+export interface PlanSession {
+  id: string;
+  week: number;
+  position: number;
+  lesson_id: string;
+  lesson_title: string;
+  status: PlanSessionState;
+}
+
+/** A study plan with its weekly schedule and the session «Continuar plan» opens. */
+export interface StudyPlan {
+  id: string;
+  language_id: string;
+  goal: string;
+  frequency: number;
+  daily_minutes: number;
+  weeks: number;
+  created_at: string;
+  adjusted_at: string | null;
+  next_session: PlanSession | null;
+  sessions: PlanSession[];
+}
+
+/** `GET /plans?language_id=`: a language without a plan answers `plan: null`, not an error. */
+export interface LanguagePlan {
+  language_id: string;
+  plan: StudyPlan | null;
+}

@@ -1,37 +1,5 @@
 import { SectionPage } from "./SectionPage";
 
-export function LessonsPage() {
-  return (
-    <SectionPage
-      title="Lecciones"
-      description="El siguiente paso de aprendizaje del idioma activo: unidades cortas con práctica y feedback del tutor."
-      phase="Vista base · F1"
-      items={[
-        "Continuar aprendiendo: la lección siguiente en una tarjeta destacada.",
-        "Unidades de vocabulario, gramática, pronunciación, escucha y práctica situacional.",
-        "Duración estimada, dificultad y estado de cada lección.",
-        "Al terminar: resultado, errores relevantes, vocabulario nuevo y próxima recomendación.",
-      ]}
-    />
-  );
-}
-
-export function PlansPage() {
-  return (
-    <SectionPage
-      title="Planes de estudio"
-      description="Un objetivo transformado en una ruta de aprendizaje con frecuencia, tiempo diario y sesiones."
-      phase="Vista base · F1"
-      items={[
-        "Objetivo explícito, por ejemplo «Pasar de A1 a B1 en francés».",
-        "Frecuencia de estudio y tiempo diario configurables.",
-        "Cronograma por semanas y sesiones pendientes, en curso o completadas.",
-        "«Continuar plan» como acción primaria y «Ajustar plan» como secundaria.",
-      ]}
-    />
-  );
-}
-
 export function TranslatePage() {
   return (
     <SectionPage
