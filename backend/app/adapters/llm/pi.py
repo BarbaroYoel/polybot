@@ -196,6 +196,13 @@ class PiCliAdapter:
                 # Its own session lets `_terminate` kill the whole group, children included.
                 start_new_session=True,
             )
+        except OSError as exc:
+            # A missing or non-executable binary is the provider failing to start, not a bug in
+            # the API: every caller already degrades on `LlmUnavailable`. Leaving it as an
+            # `OSError` turned a best-effort lesson comment into a 500 (F5 S8).
+            shutil.rmtree(workdir, ignore_errors=True)
+            logger.warning("pi could not start: %s", type(exc).__name__)
+            raise LlmUnavailable(_FAILURE_MESSAGES["error"]) from exc
         except BaseException:
             shutil.rmtree(workdir, ignore_errors=True)
             raise
