@@ -20,14 +20,16 @@ Nothing outside this package knows `needle` exists (ADR-004).
 import array
 import asyncio
 import os
+import queue
 import sys
 import wave
+from collections.abc import AsyncIterator, Sequence
 from io import BytesIO
 from types import ModuleType
 from typing import Any
 
 from app.domain.errors import AudioTooLong, InvalidAudio, SttUnavailable
-from app.ports.stt import Transcription
+from app.ports.stt import StreamUpdate, Transcription
 
 # What the browser records and what Whistle supports natively (S1).
 SAMPLE_RATE = 16_000
@@ -99,6 +101,21 @@ def _samples(pcm: bytes) -> array.array:
     return array.array("f", (value / SAMPLE_SCALE for value in shorts))
 
 
+def _update(answer: Any) -> StreamUpdate:
+    """Translate one engine dict into the port's shape, rejecting anything unusable (ADR-022)."""
+    if not isinstance(answer, dict):
+        raise SttUnavailable(f"unexpected stream answer: {type(answer).__name__}")
+    received = answer.get("received")
+    pass_ms = answer.get("pass_ms")
+    return StreamUpdate(
+        text=str(answer.get("text") or ""),
+        pending=str(answer.get("pending") or ""),
+        language=answer.get("language") or None,
+        received_ms=round(float(received or 0) * 1000),
+        pass_ms=float(pass_ms) if pass_ms is not None else None,
+    )
+
+
 class WhistleSttAdapter:
     """`SttPort` over `cactus-needle`: one engine for the process, one thread per transcription."""
 
@@ -116,6 +133,64 @@ class WhistleSttAdapter:
             language_detected=answer.get("language") or None,
             duration_ms=duration_ms,
         )
+
+    async def stream(
+        self,
+        chunks: AsyncIterator[Sequence[float]],
+        *,
+        language_code: str | None,
+    ) -> AsyncIterator[StreamUpdate]:
+        """Bridge the blocking live engine to asyncio (F7, ADR-022).
+
+        The engine consumes chunks from a blocking iterator in a worker thread and yields one dict
+        per chunk. The event loop feeds that iterator and drains the results, so no engine call
+        runs on the loop. The caller owns the window: ending `chunks` flushes the engine's tail.
+        """
+        loop = asyncio.get_running_loop()
+        inbox: queue.Queue[Sequence[float] | None] = queue.Queue()
+        outbox: asyncio.Queue[StreamUpdate | BaseException | None] = asyncio.Queue()
+
+        def push(item: StreamUpdate | BaseException | None) -> None:
+            # The worker can outlive a cancellation; never touch a closed loop.
+            if not loop.is_closed():
+                loop.call_soon_threadsafe(outbox.put_nowait, item)
+
+        def run_engine() -> None:
+            engine = _engine()
+
+            def blocking_chunks():
+                while True:
+                    item = inbox.get()
+                    if item is None:
+                        return
+                    yield item
+
+            try:
+                for answer in engine.stream(blocking_chunks(), language=language_code):
+                    push(_update(answer))
+            except BaseException as error:
+                push(SttUnavailable(str(error)))
+            finally:
+                push(None)
+
+        # `asyncio.to_thread` keeps the CPU work off the loop; the task only exists so a cancelled
+        # stream can stop feeding the worker.
+        worker = asyncio.create_task(asyncio.to_thread(run_engine))
+        try:
+            async for chunk in chunks:
+                inbox.put_nowait(chunk)
+            inbox.put_nowait(None)
+            while True:
+                item = await outbox.get()
+                if item is None:
+                    break
+                if isinstance(item, BaseException):
+                    raise item
+                yield item
+        finally:
+            inbox.put_nowait(None)
+            if not worker.done():
+                worker.cancel()
 
     def _run_engine(self, pcm: bytes, language_code: str | None) -> dict[str, Any]:
         """One blocking call. Runs in a worker thread; anything it raises is the engine failing."""

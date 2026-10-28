@@ -20,6 +20,8 @@ con una propuesta explícita. Un agente no promueve una propuesta a decisión po
 | Testing backend (2026-10-22) | **pytest + httpx** | `backend/tests/{unit,integration}`; la API se prueba sobre una base migrada. |
 | Motor del tutor (2026-10-23) | **Pi por defecto; OpenCode alternativo** (2026-10-26), detrás del puerto `LLM` | `LLM_PROVIDER` elige el adaptador. Pi: `pi --print --mode json` con herramientas apagadas (ADR-013). OpenCode: `opencode run` con agente `plan` y modelo configurable (ADR-019). |
 | Streaming de texto (2026-10-23) | **SSE** para el chat; WebSocket solo para el intérprete | Eventos `token`, `message_end`, `correction`, `vocabulary`, `error` (ADR-013). |
+| Intérprete en tiempo real (2026-10-28) | **WebSocket + Whistle en ventanas de 4,5 s** con reset y 0,5 s de solape | El stream continuo se degrada después de ~5 s en esta máquina; ver ADR-022. |
+| Traducción con OpenCode (2026-10-28) | Agente **`general`** separado del `plan` del tutor | `OPENCODE_TRANSLATION_AGENT`; con `plan` el modelo comentaba el pedido en vez de traducir (F7 T6, ADR-022). |
 | Traducción de mensajes y fragmentos (2026-10-23) | Un turno corto del mismo puerto `LLM` (`translate.v1`) | Solo el mensaje completo se persiste; el fragmento es efímero (ADR-014). |
 | Audio → texto (STT) (2026-10-23) | **Whistle** (Cactus Compute), local en el backend vía `cactus-needle` | CPU, streaming, 7 idiomas; detrás de un puerto `STT` (ADR-015). |
 

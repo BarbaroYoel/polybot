@@ -237,3 +237,74 @@ def test_the_engine_runs_off_the_event_loop(engine: FakeWhistleEngine) -> None:
 
     # A blocking engine call on the loop would stall every other request (docs/conventions.md §2).
     assert engine.threads and engine.threads[0] != "MainThread"
+
+
+def stream(chunks: list[list[float]], language_code: str | None = None) -> list:
+    """Run the real adapter over the fake engine, with the given float chunks."""
+
+    async def feed():
+        for chunk in chunks:
+            yield chunk
+
+    async def collect():
+        return [
+            update
+            async for update in WhistleSttAdapter().stream(feed(), language_code=language_code)
+        ]
+
+    return asyncio.run(collect())
+
+
+def test_streaming_answers_one_update_per_chunk(engine: FakeWhistleEngine) -> None:
+    engine.stream_results = [
+        {"text": "hola", "pending": "", "language": "es", "received": 1.0, "pass_ms": 10.0},
+        {"text": "mundo", "pending": "", "language": "es", "received": 2.0, "pass_ms": 20.0},
+    ]
+
+    updates = stream([[0.0] * SAMPLE_RATE, [0.1] * SAMPLE_RATE], language_code="es")
+
+    assert [update.text for update in updates] == ["hola", "mundo"]
+    assert updates[1].received_ms == 2000
+    assert updates[0].language == "es"
+    assert engine.stream_languages == ["es"]
+    assert engine.stream_audio == [[0.0] * SAMPLE_RATE, [0.1] * SAMPLE_RATE]
+    # The blocking engine never runs on the event loop (F7 S3, docs/conventions.md §2).
+    assert engine.stream_threads and engine.stream_threads[0] != "MainThread"
+
+
+def test_streaming_surfaces_an_engine_failure(engine: FakeWhistleEngine) -> None:
+    engine.failure = RuntimeError("boom")
+
+    with pytest.raises(SttUnavailable):
+        stream([[0.0] * SAMPLE_RATE])
+
+
+def test_streaming_leaves_the_event_loop_free(engine: FakeWhistleEngine) -> None:
+    engine.stream_results = [{"text": "hola", "language": "es", "received": 1.0}]
+    engine.stream_delay = 0.05
+
+    async def run():
+        ticks = 0
+
+        async def ticker():
+            nonlocal ticks
+            while True:
+                await asyncio.sleep(0.01)
+                ticks += 1
+
+        ticking = asyncio.create_task(ticker())
+
+        async def feed():
+            yield [0.0] * SAMPLE_RATE
+            yield [0.0] * SAMPLE_RATE
+
+        updates = [
+            update async for update in WhistleSttAdapter().stream(feed(), language_code=None)
+        ]
+        ticking.cancel()
+        return updates, ticks
+
+    updates, ticks = asyncio.run(run())
+
+    assert updates
+    assert ticks >= 2

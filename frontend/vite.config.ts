@@ -11,6 +11,8 @@ export default defineConfig({
       "/api": {
         target: "http://localhost:8000",
         changeOrigin: true,
+        // The interpreter is the only WebSocket of the app (ADR-022).
+        ws: true,
       },
     },
   },
@@ -21,6 +23,8 @@ export default defineConfig({
       "/api": {
         target: "http://localhost:8000",
         changeOrigin: true,
+        // The interpreter is the only WebSocket of the app (ADR-022).
+        ws: true,
       },
     },
   },

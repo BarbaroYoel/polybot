@@ -527,6 +527,55 @@ humano pidió que chat y lecciones compartan la idea de interfaz inteligente.
 
 ---
 
+## ADR-022 — El intérprete reinicia Whistle en ventanas de 4,5 s
+
+**Estado:** aceptada · **Fecha:** 2026-10-28 · **Implementa:** F7 y el `WS /voice/interpret` que el
+contrato ya reservaba
+
+**Contexto.** ADR-015 eligió `needle.stream` para el intérprete. Antes de escribir el adaptador, T0
+midió el motor con un clip humano de 11 s en este Codespace. Un stream continuo no se sostiene: 11 s
+de audio tardaron 26 s con chunks de 1 s y 115 s con chunks de 0,25 s; con 22 s el coste subió a 84 s.
+El motor tiene un corte alrededor de los 5 s: `transcribe` de una ventana de 5 s tarda 0,3–1,3 s, pero
+una de 5,5 s salta a ~5,8 s. Reiniciar el stream en cada ventana devuelve el coste a 0,3–1,3 s por
+ventana. La máquina tiene 2 vCPU y durante la medición otro proceso mantuvo la carga alta, así que
+los valores absolutos varían; la discontinuidad de ~5 s se repitió en todas las corridas.
+
+**Decisión.**
+
+1. El intérprete alimenta Whistle en **ventanas de 4,5 s como máximo**; cada ventana abre un
+   `needle.stream` nuevo y lo cierra al terminar. No hay un stream continuo de toda la sesión.
+2. Cada ventana lleva **0,5 s de solape** con la anterior; el texto del borde se deduplica por
+   prefijo/sufijo antes de emitir el segmento. El servidor decide el corte; el cliente solo envía
+   audio.
+3. Los parciales se emiten por chunk (~1 s) dentro de la ventana. Al cerrarla se emite un `segment`
+   con el texto consolidado y su `translation` final. La traducción de parciales sigue P5, con
+   *debounce*, una petición en vuelo y descarte por `seq`.
+4. Las sesiones son efímeras (P2), el modo texto entra en F7 (P1), la detección de origen es
+   opcional (P3) y el TTS queda fuera (P4).
+5. El contrato del WebSocket se documenta en `docs/api-contract.md`; los eventos `partial`,
+   `partial_translation`, `segment`, `translation` y `error` usan el sobre de error del §4.
+
+**Consecuencias.**
+
+- El intérprete corta cada 4,5 s: puede partir una frase y el texto del borde depende de la
+  deduplicación. Es un límite visible, no un fallo silencioso; la UI muestra segmentos, no frases
+  perfectas.
+- La latencia ya no crece con la duración de la sesión, pero depende de la CPU: si la máquina no da
+  abasto, la sesión se atrasa. La UI muestra «Procesando…» y el servidor no promete tiempo real fijo.
+- El motor se llama una vez por ventana y el proveedor de traducción recibe parciales; el *debounce*
+  y el descarte por `seq` son parte de la corrección, no una optimización opcional.
+- La traducción con OpenCode usa **`OPENCODE_TRANSLATION_AGENT`** (default `general`). Con `plan`, el
+  modelo narraba su rol y devolvía comentarios meta; la prueba real de T6 lo mostró y el cambio lo
+  corrigió. El tutor conserva `plan`. Con el proveedor actual una traducción tarda 3–7 s, así que el
+  parcial suele quedar viejo y la UI termina mostrando la traducción del segmento final.
+- El corte de 4,5 s puede degradar un segmento corto (una sílaba o una frase partida); el solape de
+  0,5 s reduce el borde, no lo elimina. Es un límite visible, no un fallo silencioso.
+- Si en el futuro se cambia de motor o se encuentra una forma de mantener el contexto sin el corte de
+  5 s, esta decisión se revisa; Whistle no es el único adaptador posible.
+- No hay persistencia ni audio guardado: el historial se pierde al recargar (P2).
+
+---
+
 ## Precedencia entre el documento y el wireframe
 
 Si el texto de `desing.md` y la imagen `grayscale_language_tutor_chat_ui.png` difieren: **manda el texto**.

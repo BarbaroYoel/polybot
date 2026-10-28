@@ -157,7 +157,7 @@ decisión es de otra fase (ADR-018).
 | POST | `/voice/transcribe` | `multipart/form-data` (`audio`, `language_code?`). Devuelve `{ "text", "language_detected", "duration_ms" }`. **F4.** Detalle abajo. |
 | POST | `/voice/speech` | Sintetiza y **cachea por contenido**: `{ "text", "language_code", "voice?", "speed?": 1.0 }` → `200 audio/wav` con la cabecera `X-Speech-Id` (sha256 de voz, velocidad y texto). Repetir la misma petición devuelve el mismo id sin volver a sintetizar. Texto de 1 a 2000 caracteres; `speed` de 0,5 a 2,0 → fuera de rango, 422 `validation_error`. Idioma sin voz instalada o voz inexistente → 400 `voice_not_available`; motor caído o sin binario → 502 `tts_unavailable`. **F4, ADR-016.** |
 | GET | `/voice/speech/{id}` | Devuelve el WAV cacheado de ese id (`audio/wav`), o 404 `speech_not_found` si ya no está. |
-| WS | `/voice/interpret` | Intérprete: envía segmentos de audio, recibe `transcript` y `translation` por turno. |
+| WS | `/voice/interpret` | Intérprete en vivo (**F7, ADR-022**): el cliente envía PCM de 16 kHz y recibe `partial`, `segment` y sus traducciones. Detalle abajo. |
 
 #### La transcripción
 
@@ -187,6 +187,45 @@ decisión es de otra fase (ADR-018).
   grabación del usuario.
 - `speed` se traduce a la escala de longitud de Piper (`1 / speed`), así que 0,5 es la mitad de
   rápido.
+
+#### El intérprete (WebSocket)
+
+`WS /api/v1/voice/interpret?source=<code>&target=<code>` (**F7, ADR-022**). El cliente envía audio
+PCM y recibe transcripción y traducción por eventos. La sesión es **efímera** (P2): no se guarda
+audio ni texto, y al cerrar se pierde el historial. El TTS queda fuera de esta fase (P4).
+
+- `source` es opcional: sin él se detecta el idioma; si viene, debe ser uno de los siete de Whistle
+  (`en`, `de`, `fr`, `es`, `it`, `nl`, `pl`). `target` es obligatorio, de 1 a 8 caracteres.
+- Al abrir, el servidor manda `ready`:
+
+```jsonc
+{ "type": "ready", "format": "pcm_s16le", "sample_rate": 16000,
+  "source": "fr", "target": "es" }
+```
+
+- Cliente → servidor:
+  - **Frames binarios** de PCM mono 16 bits little-endian a 16 kHz, de hasta 2 s cada uno (el
+    cliente envía ~1 s). Sin cabecera WAV.
+  - `{"type":"stop"}`: cierra la entrada, vacía la cola del motor y espera el último segmento y su
+    traducción.
+  - `{"type":"cancel"}`: descarta la ventana en curso y cierra sin segmento.
+- Servidor → cliente:
+  - `{"type":"partial","seq":12,"text":"...","pending":"...","language":"fr","received_ms":1200}`
+    — `text` es lo confirmado en la ventana hasta ese chunk; `received_ms` es relativo a la ventana.
+  - `{"type":"partial_translation","seq":12,"text":"...","target":"es"}` — efímera, no entra al
+    historial.
+  - `{"type":"segment","id":"...","text":"...","language":"fr","start_ms":0,"end_ms":4500}`
+  - `{"type":"translation","segment_id":"...","text":"...","target":"es"}`
+  - `{"type":"error","error":{"code":"...","message":"...","details":{},"request_id":"..."}}`
+- El intérprete trabaja en **ventanas de 4,5 s** con 0,5 s de solape (ADR-022); un `segment` es una
+  ventana, no una frase. El texto repetido del borde se deduplica; `start_ms`/`end_ms` son relativos
+  al inicio de la sesión y pueden solaparse 0,5 s.
+- Los parciales se traducen con *debounce*; una respuesta con `seq` viejo se descarta. La traducción
+  del segmento final es la que manda; las parciales no se guardan.
+- Un fallo de traducción emite `error` (`llm_unavailable` o `llm_timeout`) y **no** borra el
+  segmento. Un fallo del motor emite `stt_unavailable` y cierra la sesión.
+- Códigos de cierre: `1000` stop/cancel normal, `1003` audio inválido, `1008` parámetros no
+  soportados, `1011` fallo del motor o error interno.
 
 ### Aprendizaje
 | Método | Ruta | Qué hace |

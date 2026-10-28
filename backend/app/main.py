@@ -49,6 +49,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             command=[settings.opencode_bin_path],
             model=settings.opencode_model_or_none,
             agent=settings.opencode_agent,
+            translation_agent=settings.opencode_translation_agent,
             timeout_seconds=settings.opencode_timeout_seconds,
         )
     else:

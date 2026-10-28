@@ -1,21 +1,5 @@
 import { SectionPage } from "./SectionPage";
 
-export function TranslatePage() {
-  return (
-    <SectionPage
-      title="Traducción en tiempo real"
-      description="Dos flujos separados: traducir texto e interpretar voz, sin mezclarlos con una lección."
-      phase="Vista base · F1"
-      items={[
-        "Traducir texto: idioma de origen y destino, entrada, traducción, copiar y reproducir.",
-        "Intérprete de voz: iniciar y detener escucha, señal clara de micrófono activo.",
-        "Historial de fragmentos originales y traducidos, ordenados en el tiempo.",
-        "Estados de permiso, conexión, escucha, procesamiento y error.",
-      ]}
-    />
-  );
-}
-
 export function SettingsPage() {
   return (
     <SectionPage

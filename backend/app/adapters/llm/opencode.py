@@ -63,6 +63,7 @@ class OpenCodeCliAdapter:
         command: Sequence[str] = ("opencode",),
         model: str | None = None,
         agent: str = "plan",
+        translation_agent: str | None = None,
         timeout_seconds: float = 90.0,
         prompt: TutorPrompt | None = None,
         feedback_prompt: FeedbackPrompt | None = None,
@@ -72,20 +73,23 @@ class OpenCodeCliAdapter:
         self._command = tuple(command)
         self._model = model or None
         self._agent = agent
+        # The `plan` agent narrates its own role; a translation-only agent keeps the answer clean
+        # (F7 T6). Defaults to the tutor agent so existing configurations do not change.
+        self._translation_agent = translation_agent or agent
         self._timeout = timeout_seconds
         self._prompt = prompt or TutorPrompt.load()
         self._feedback = feedback_prompt or FeedbackPrompt.load()
         self._translation = translation_prompt or TranslationPrompt.load()
         self._lesson_review = lesson_review_prompt or LessonReviewPrompt.load()
 
-    def _argv(self, prompt: str) -> list[str]:
+    def _argv(self, prompt: str, *, agent: str | None = None) -> list[str]:
         argv = [
             *self._command,
             "run",
             "--format",
             "json",
             "--agent",
-            self._agent,
+            agent or self._agent,
         ]
         if self._model:
             argv.extend(["--model", self._model])
@@ -140,13 +144,13 @@ class OpenCodeCliAdapter:
             self._translation.render_system(request),
             self._translation.render_turn(request),
         )
-        return parse_translation(await self._complete(prompt))
+        return parse_translation(await self._complete(prompt, agent=self._translation_agent))
 
-    async def _complete(self, prompt: str) -> str:
+    async def _complete(self, prompt: str, *, agent: str | None = None) -> str:
         """Run one invocation to the end and return the whole answer."""
         try:
             async with asyncio.timeout(self._timeout):
-                async with self._run(prompt) as (process, stderr_task):
+                async with self._run(prompt, agent=agent) as (process, stderr_task):
                     answer = await self._collected(process.stdout)
                     await process.wait()
 
@@ -159,13 +163,15 @@ class OpenCodeCliAdapter:
         return answer
 
     @asynccontextmanager
-    async def _run(self, prompt: str) -> AsyncIterator[tuple[Any, Any]]:
+    async def _run(
+        self, prompt: str, *, agent: str | None = None
+    ) -> AsyncIterator[tuple[Any, Any]]:
         """Run one isolated invocation and guarantee the subprocess and its cwd are released."""
         # A neutral cwd keeps project settings and context files out of the tutor's reach.
         workdir = tempfile.mkdtemp(prefix="polybot-opencode-")
         try:
             process = await asyncio.create_subprocess_exec(
-                *self._argv(prompt),
+                *self._argv(prompt, agent=agent),
                 stdin=asyncio.subprocess.DEVNULL,
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,

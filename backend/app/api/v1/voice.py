@@ -5,15 +5,37 @@ clip and, when the UI knows it, the language of the audio. The audio is read int
 the use case and dropped with the request: nothing is persisted (S7).
 """
 
+import array
+import json
+import sys
+import uuid
+from collections.abc import AsyncIterator
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, File, Form, Response
+from fastapi import APIRouter, Depends, File, Form, Response, WebSocket, WebSocketDisconnect
 from pydantic import BaseModel, Field, StringConstraints
 
-from app.application.voice import VoiceService
-from app.core.dependencies import get_voice_service
+from app.application.interpreter import (
+    ErrorEvent,
+    InterpreterCancelled,
+    InterpreterEvent,
+    InterpreterService,
+    PartialEvent,
+    PartialTranslationEvent,
+    SegmentEvent,
+    TranslationEvent,
+)
+from app.application.voice import VoiceService, normalize_language
+from app.core.dependencies import get_voice_service, get_ws_interpreter_service
+from app.domain.errors import InvalidAudio
 
 router = APIRouter(tags=["voice"])
+
+# Whistle's seven languages; the target can be any language the tutor explains in.
+STT_LANGUAGES = frozenset({"en", "de", "fr", "es", "it", "nl", "pl"})
+
+# A frame of two seconds at 16 kHz mono 16-bit: more than the contract's ~1 s and still bounded.
+MAX_FRAME_BYTES = 16_000 * 2 * 2
 
 
 class TranscriptionOut(BaseModel):
@@ -114,3 +136,191 @@ async def get_speech(
     """Serve a clip the cache already holds; `404 speech_not_found` when it is gone."""
     speech = await service.speech(speech_id)
     return Response(content=speech.audio, media_type=speech.media_type)
+
+
+def _pcm_to_samples(data: bytes) -> list[float]:
+    """Decode one PCM frame from the browser: 16 kHz mono 16-bit little-endian (ADR-022)."""
+    if not data:
+        raise InvalidAudio("empty frame")
+    if len(data) % 2:
+        raise InvalidAudio("odd PCM frame")
+    if len(data) > MAX_FRAME_BYTES:
+        raise InvalidAudio("frame too large")
+    shorts = array.array("h")
+    shorts.frombytes(data)
+    if sys.byteorder == "big":
+        shorts.byteswap()
+    return [sample / 32768.0 for sample in shorts]
+
+
+def _error_payload(
+    request_id: str,
+    code: str,
+    message: str,
+    details: dict | None = None,
+) -> dict:
+    """The contract §4 envelope, also used on the WebSocket (ADR-022)."""
+    return {
+        "type": "error",
+        "error": {
+            "code": code,
+            "message": message,
+            "details": details or {},
+            "request_id": request_id,
+        },
+    }
+
+
+def _event_payload(event: InterpreterEvent, request_id: str) -> dict:
+    if isinstance(event, PartialEvent):
+        return {
+            "type": "partial",
+            "seq": event.seq,
+            "text": event.text,
+            "pending": event.pending,
+            "language": event.language,
+            "received_ms": event.received_ms,
+        }
+    if isinstance(event, PartialTranslationEvent):
+        return {
+            "type": "partial_translation",
+            "seq": event.seq,
+            "text": event.text,
+            "target": event.target,
+        }
+    if isinstance(event, SegmentEvent):
+        return {
+            "type": "segment",
+            "id": event.id,
+            "text": event.text,
+            "language": event.language,
+            "start_ms": event.start_ms,
+            "end_ms": event.end_ms,
+        }
+    if isinstance(event, TranslationEvent):
+        return {
+            "type": "translation",
+            "segment_id": event.segment_id,
+            "text": event.text,
+            "target": event.target,
+        }
+    return _error_payload(request_id, event.code, event.message, event.details)
+
+
+async def _close_with_error(
+    websocket: WebSocket,
+    request_id: str,
+    code: str,
+    message: str,
+    details: dict | None,
+    close_code: int,
+) -> None:
+    try:
+        await websocket.send_json(_error_payload(request_id, code, message, details))
+        await websocket.close(code=close_code, reason=code)
+    except (WebSocketDisconnect, RuntimeError):
+        return
+
+
+@router.websocket("/voice/interpret")
+async def interpret(
+    websocket: WebSocket,
+    service: InterpreterService = Depends(get_ws_interpreter_service),
+) -> None:
+    """Live interpreter: client PCM frames in, transcript and translation events out (F7)."""
+    await websocket.accept()
+    request_id = uuid.uuid4().hex
+    source = normalize_language(websocket.query_params.get("source"))
+    target = (websocket.query_params.get("target") or "").strip()
+
+    if not target or len(target) > 8:
+        await _close_with_error(
+            websocket,
+            request_id,
+            "invalid_request",
+            "Elegí un idioma de destino para interpretar.",
+            {},
+            1008,
+        )
+        return
+    if source is not None and source not in STT_LANGUAGES:
+        await _close_with_error(
+            websocket,
+            request_id,
+            "unsupported_language",
+            "El intérprete aún no tiene voz para ese idioma de origen.",
+            {"source": source},
+            1008,
+        )
+        return
+
+    await websocket.send_json(
+        {
+            "type": "ready",
+            "format": "pcm_s16le",
+            "sample_rate": 16_000,
+            "source": source,
+            "target": target,
+        }
+    )
+
+    cancelled = False
+
+    async def audio() -> AsyncIterator[list[float]]:
+        nonlocal cancelled
+        while True:
+            try:
+                message = await websocket.receive()
+            except WebSocketDisconnect:
+                # A dropped client is a cancelled session, not an engine failure.
+                raise InterpreterCancelled from None
+            if message["type"] == "websocket.disconnect":
+                raise InterpreterCancelled
+            data = message.get("bytes")
+            if data is not None:
+                yield _pcm_to_samples(data)
+                continue
+            raw = message.get("text")
+            if not raw:
+                continue
+            try:
+                control = json.loads(raw)
+            except json.JSONDecodeError as error:
+                raise InvalidAudio("invalid control message") from error
+            kind = control.get("type")
+            if kind == "stop":
+                return
+            if kind == "cancel":
+                cancelled = True
+                raise InterpreterCancelled
+            raise InvalidAudio(f"unknown control message: {kind}")
+
+    error_code: str | None = None
+    try:
+        async for event in service.events(audio(), source=source, target=target):
+            if isinstance(event, ErrorEvent):
+                error_code = event.code
+            await websocket.send_json(_event_payload(event, request_id))
+    except WebSocketDisconnect:
+        return
+    except InvalidAudio:
+        await _close_with_error(
+            websocket,
+            request_id,
+            "invalid_audio",
+            "No pudimos leer ese audio. Enviá PCM de 16 kHz mono 16 bits.",
+            {},
+            1003,
+        )
+        return
+    finally:
+        if error_code in {"stt_unavailable", "internal_error"}:
+            close_code = 1011
+        elif error_code == "invalid_audio":
+            close_code = 1003
+        else:
+            close_code = 1000
+        try:
+            await websocket.close(code=close_code, reason="cancelled" if cancelled else "stopped")
+        except RuntimeError:
+            pass

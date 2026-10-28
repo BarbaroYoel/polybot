@@ -4,17 +4,17 @@ PWA de tutor de idiomas guiada por IA, centrada en el chat, con la voz como capa
 clase. Un solo idioma activo a la vez; conversaciones, lecciones, planes y progreso aislados por
 idioma.
 
-**Estado:** F1–F6 completas. F6 (progreso) está en la rama `feat/f6-progress`, con `uv run pytest`
-(221 passed), Ruff, typecheck y build verdes, más una sonda HTTP contra una base aislada. La fuente de
-verdad del avance y de la evidencia de cada fase es [`docs/roadmap.md`](./docs/roadmap.md); el
-detalle tarea por tarea está en [`odd/tasks/`](./odd/tasks). F7 está pendiente.
+**Estado:** F1–F7 completas. F7 (intérprete en tiempo real) está en la rama
+`feat/f7-live-interpreter`, con `uv run pytest` (292 passed), Ruff, typecheck, build y una sonda de
+navegador con micrófono falso. La fuente de verdad del avance y de la evidencia de cada fase es
+[`docs/roadmap.md`](./docs/roadmap.md); el detalle tarea por tarea está en [`odd/tasks/`](./odd/tasks).
 
 Lo que ya funciona de punta a punta: la PWA lee idiomas y conversaciones de la API, conversa con el
 tutor en tiempo real por SSE, pide correcciones y vocabulario al cerrar cada turno, traduce un mensaje
-o un fragmento seleccionado, transcribe y reproduce voz con motores locales, y completa lecciones con
+o un fragmento seleccionado, transcribe y reproduce voz con motores locales, completa lecciones con
 corrección determinista, errores, vocabulario y planes de estudio por semanas con el estado de cada
-sesión derivado de los intentos, y consulta su progreso real por idioma: lecciones completadas, meta
-semanal de conversaciones, actividad por destreza, errores frecuentes e historial.
+sesión derivado de los intentos, consulta su progreso real por idioma, y traduce texto o interpreta
+voz en vivo por WebSocket con transcripción y traducción por segmentos.
 
 ## Requisitos
 
@@ -55,10 +55,15 @@ tutor. Por defecto usa **Pi**; para usar **OpenCode**:
 LLM_PROVIDER=opencode
 OPENCODE_MODEL=proveedor/modelo
 OPENCODE_AGENT=plan
+OPENCODE_TRANSLATION_AGENT=general
 ```
 
 `OPENCODE_MODEL` es obligatorio en la práctica: cada instalación de OpenCode autoriza proveedores
-distintos y su modelo por defecto puede no estar habilitado (ADR-019).
+distintos y su modelo por defecto puede no estar habilitado (ADR-019). La traducción usa su propio
+agente (`general`) porque `plan` narra su rol en vez de traducir (F7 T6).
+
+El intérprete de voz vive en `WS /api/v1/voice/interpret`; el proxy de Vite ya reenvía WebSocket
+(`ws: true`) y el micrófono solo se pide al pulsar «Iniciar micrófono». El audio no se guarda.
 
 ## Checks
 

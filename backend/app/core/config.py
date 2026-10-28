@@ -41,6 +41,9 @@ class Settings(BaseSettings):
     opencode_bin_path: str = "opencode"
     opencode_model: str = ""
     opencode_agent: str = "plan"
+    # Translation uses its own agent: the `plan` identity narrates the task instead of translating
+    # (F7 T6). `general` answers directly; an installation without it can override this.
+    opencode_translation_agent: str = "general"
     opencode_timeout_seconds: float = 90.0
 
     # Speech synthesis: the Piper binary and its voices are files on this machine (ADR-016).
@@ -97,6 +100,11 @@ class Settings(BaseSettings):
     @classmethod
     def _empty_agent_means_plan(cls, value: str) -> str:
         return value.strip() or "plan"
+
+    @field_validator("opencode_translation_agent")
+    @classmethod
+    def _empty_translation_agent_means_general(cls, value: str) -> str:
+        return value.strip() or "general"
 
     @cached_property
     def opencode_model_or_none(self) -> str | None:

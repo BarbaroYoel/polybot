@@ -56,7 +56,7 @@ function audioContextClass(): AudioContextConstructor | null {
  * (usually 48 kHz) and the API only takes 16 kHz. A plain mean is enough for speech and keeps the
  * file small.
  */
-function resample(samples: Float32Array, from: number, to: number): Float32Array {
+export function resample(samples: Float32Array, from: number, to: number): Float32Array {
   if (from === to) return samples;
   const ratio = from / to;
   const length = Math.floor(samples.length / ratio);
@@ -72,7 +72,7 @@ function resample(samples: Float32Array, from: number, to: number): Float32Array
 }
 
 /** Float samples in [-1, 1] → the 16-bit PCM the WAV header describes. */
-function toPcm(samples: Float32Array): ArrayBuffer {
+export function toPcm(samples: Float32Array): ArrayBuffer {
   const buffer = new ArrayBuffer(samples.length * SAMPLE_WIDTH);
   const view = new DataView(buffer);
   samples.forEach((sample, index) => {
@@ -121,7 +121,8 @@ export interface Recording {
 /**
  * One recording at a time. `start` asks for the microphone and begins collecting; `stop` closes
  * the graph and resolves the WAV; `cancel` discards everything, so a cancelled recording can never
- * reach the API.
+ * reach the API. With a sample listener it becomes a streamer: the caller gets the raw float
+ * chunks and nothing is accumulated for a WAV (F7 T5).
  */
 export class VoiceRecorder {
   private stream: MediaStream | null = null;
@@ -132,6 +133,7 @@ export class VoiceRecorder {
   private rate = TARGET_RATE;
   private startedAt = 0;
   private cancelled = false;
+  private onSamples: ((samples: Float32Array, rate: number) => void) | null = null;
 
   get isRecording(): boolean {
     return this.stream !== null;
@@ -139,9 +141,11 @@ export class VoiceRecorder {
 
   /**
    * Ask for the microphone and start collecting. The permission prompt only appears here: never on
-   * load (desing.md §8, «Iniciar voz → solicitar permiso cuando corresponda»).
+   * load (desing.md §8, «Iniciar voz → solicitar permiso cuando corresponda»). When `onSamples` is
+   * given, each processor block is handed to it instead of being accumulated for `stop`.
    */
-  async start(): Promise<void> {
+  async start(onSamples?: (samples: Float32Array, rate: number) => void): Promise<void> {
+    this.onSamples = onSamples ?? null;
     if (!navigator.mediaDevices?.getUserMedia) {
       throw new RecordingError("unsupported", "Este navegador no puede grabar audio.");
     }
@@ -177,7 +181,12 @@ export class VoiceRecorder {
     this.processor = this.context.createScriptProcessor(4096, 1, 1);
     this.processor.onaudioprocess = (event) => {
       if (this.cancelled) return;
-      this.chunks.push(new Float32Array(event.inputBuffer.getChannelData(0)));
+      const samples = new Float32Array(event.inputBuffer.getChannelData(0));
+      if (this.onSamples) {
+        this.onSamples(samples, this.rate);
+      } else {
+        this.chunks.push(samples);
+      }
     };
     this.source.connect(this.processor);
     // A script processor only runs while it is connected to a destination; the gain stays at zero.
@@ -223,6 +232,7 @@ export class VoiceRecorder {
     this.stream = null;
     this.context = null;
     this.chunks = [];
+    this.onSamples = null;
   }
 }
 

@@ -4,11 +4,8 @@ import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 import { AppShell } from "../components/AppShell";
 import { ErrorState, LoadingState } from "../components/States";
 import { LanguageProvider } from "../lib/language";
-import {
-  NotFoundPage,
-  SettingsPage,
-  TranslatePage,
-} from "../features/sections/pages";
+import { NotFoundPage, SettingsPage } from "../features/sections/pages";
+import { TranslatePage } from "../features/translate/TranslatePage";
 import { HomePage } from "../features/home/HomePage";
 import { LanguagesPage } from "../features/languages/LanguagesPage";
 import { LessonPage } from "../features/lessons/LessonPage";

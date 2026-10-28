@@ -285,6 +285,29 @@ def test_an_empty_translation_is_a_failure(monkeypatch: pytest.MonkeyPatch) -> N
         )
 
 
+def test_translation_uses_its_own_agent(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    """The tutor keeps `plan`; translation uses the configured translation agent (F7 T6)."""
+    argv_file = tmp_path / "argv.txt"
+    monkeypatch.setenv("FAKE_OPENCODE_MODE", "translate")
+    monkeypatch.setenv("FAKE_OPENCODE_ARGV_FILE", str(argv_file))
+    adapter = OpenCodeCliAdapter(
+        command=[sys.executable, str(FAKE_OPENCODE)],
+        model="test/model#variant",
+        agent="plan",
+        translation_agent="general",
+        timeout_seconds=30.0,
+    )
+
+    translation = asyncio.run(
+        adapter.translate(TranslationRequest(text="How are you?", target_language="es"))
+    )
+    argv = argv_file.read_text(encoding="utf-8").splitlines()
+
+    assert translation == "¿Cómo estás?"
+    assert "general" in argv
+    assert "plan" not in argv
+
+
 def test_review_lesson_returns_the_comment(monkeypatch: pytest.MonkeyPatch) -> None:
     adapter = make_adapter(monkeypatch, "lesson")
 

@@ -1,7 +1,8 @@
 # Roadmap — Polybot
 
-Cada fase termina con algo verificable por un humano. Estado actual: **F6.6 (lecciones con
-ejercicios de elección) completada** en el árbol de trabajo. F1–F6.6 completas; F7 pendiente.
+Cada fase termina con algo verificable por un humano. Estado actual: **F1–F7 completas**; F6.6 y F7
+están mergeadas o listas para mergear desde sus ramas. El detalle y la evidencia viven en
+`odd/tasks/`.
 
 ## F0 — Base documental
 
@@ -211,12 +212,25 @@ la correcta 4/4 completada.
 los ejercicios nuevos sin recrearla; `order` y `listen` siguen siendo decisiones aparte; el frontend
 continúa sin suite propia (`docs/stack.md`).
 
-## F7 — Intérprete en tiempo real
+## F7 — Intérprete en tiempo real — **completada** (rama `feat/f7-live-interpreter`)
 
-- WebSocket, segmentos continuos, transcripción + traducción por turno.
-- Aviso visible de latencia y precisión variables.
+Alcance, contrato y evidencia: [`odd/tasks/f7-live-interpreter.md`](../odd/tasks/f7-live-interpreter.md).
+Decisión registrada: ADR-022.
 
-**Verificación:** conversación de prueba con dos idiomas y fragmentos ordenados temporalmente.
+- [x] `WS /voice/interpret` con PCM 16 kHz, ventanas de 4,5 s, solape de 0,5 s y deduplicación.
+- [x] Whistle en streaming por ventanas (T0 midió el corte de ~5 s); el motor no bloquea el event loop.
+- [x] Traducción de parciales y segmentos finales con el mismo proveedor; la final es autoritativa.
+- [x] Modo texto real en `/translate` y PWA del intérprete con estados, historial efímero y aviso de latencia.
+- [x] `OPENCODE_TRANSLATION_AGENT=general` para que la traducción no narre el rol de `plan`.
+- [x] Contrato, ADR, stack y este roadmap actualizados.
+
+**Verificación:** `uv run pytest` 292 passed; Ruff, typecheck y build verdes; WS real con un clip
+humano de 11 s (segmentos a 2–4 s, traducciones a 7–12 s); sonda de navegador a 1280×900 y 375×812
+con micrófono falso, sin errores de consola ni desborde.
+
+**Límites conocidos:** el proveedor tarda 3–7 s por traducción, así que los parciales suelen quedar
+viejos; el corte de 4,5 s puede degradar un segmento corto; el TTS de la traducción queda fuera; no
+hay suite de frontend; a 375 px el saludo del TopBar se parte en cuatro líneas (deuda de F1).
 
 ## Fuera de alcance
 

@@ -6,7 +6,7 @@ This module is the only place that wires concrete adapters into the application 
 
 from collections.abc import AsyncIterator
 
-from fastapi import Depends, Request
+from fastapi import Depends, Request, WebSocket
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.adapters.db.conversations import (
@@ -22,6 +22,7 @@ from app.adapters.db.plans import SqlAlchemyStudyPlanRepository
 from app.adapters.db.progress import SqlAlchemyProgressRepository
 from app.application.blocks import BlockService
 from app.application.conversations import ConversationService
+from app.application.interpreter import InterpreterService
 from app.application.languages import LanguageService
 from app.application.lessons import LessonService
 from app.application.plans import PlanService
@@ -83,6 +84,31 @@ async def get_voice_service(
 ) -> VoiceService:
     """Voice needs no database: the audio is transcribed or synthesized and dropped (S7)."""
     return VoiceService(stt=stt, tts=tts)
+
+
+def get_interpreter_service(
+    stt: SttPort = Depends(get_stt),
+    llm: LlmPort = Depends(get_llm),
+) -> InterpreterService:
+    """The live interpreter shares the STT and LLM ports; the session itself is ephemeral (P2)."""
+    return InterpreterService(stt=stt, llm=llm)
+
+
+def get_ws_stt(websocket: WebSocket) -> SttPort:
+    """The STT wired at startup, read from a WebSocket (the HTTP `Request` is not available)."""
+    return websocket.app.state.stt
+
+
+def get_ws_llm(websocket: WebSocket) -> LlmPort:
+    """The LLM wired at startup, read from a WebSocket."""
+    return websocket.app.state.llm
+
+
+def get_ws_interpreter_service(
+    stt: SttPort = Depends(get_ws_stt),
+    llm: LlmPort = Depends(get_ws_llm),
+) -> InterpreterService:
+    return InterpreterService(stt=stt, llm=llm)
 
 
 async def get_block_service(

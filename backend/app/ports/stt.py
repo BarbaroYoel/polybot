@@ -5,6 +5,7 @@
 the adapter — not this port — that knows about WAV headers, threads and temporary files.
 """
 
+from collections.abc import AsyncIterator, Sequence
 from dataclasses import dataclass
 from typing import Protocol
 
@@ -23,6 +24,23 @@ class Transcription:
     duration_ms: int
 
 
+@dataclass(frozen=True, slots=True)
+class StreamUpdate:
+    """One chunk of a live transcription (F7, ADR-022).
+
+    `text` is the text the engine committed for this chunk, not the whole window: the caller joins
+    the updates. `pending` is the unconfirmed tail, useful for showing a live line. `received_ms` is
+    the audio received by the engine so far; `pass_ms` is the engine's own (cumulative) timing and
+    is not a per-chunk latency.
+    """
+
+    text: str
+    pending: str
+    language: str | None
+    received_ms: int
+    pass_ms: float | None = None
+
+
 class SttPort(Protocol):
     async def transcribe(self, audio: bytes, *, language_code: str | None) -> Transcription:
         """Transcribe one audio payload — the 16 kHz mono 16-bit WAV the browser records.
@@ -34,4 +52,17 @@ class SttPort(Protocol):
         An empty payload, a corrupt file or a shape the engine cannot take is an `InvalidAudio`;
         more audio than the limit is an `AudioTooLong`; a failing engine is `SttUnavailable`. An
         empty transcript is not an error.
+        """
+
+    def stream(
+        self,
+        chunks: AsyncIterator[Sequence[float]],
+        *,
+        language_code: str | None,
+    ) -> AsyncIterator[StreamUpdate]:
+        """Transcribe live 16 kHz mono float samples, one update per chunk.
+
+        The caller owns the window: it ends `chunks` when the window is over, and the adapter
+        flushes the engine's tail. `language_code` forces the language and `None` detects it. The
+        audio is never written to disk; a failing engine is `SttUnavailable`.
         """
