@@ -5,10 +5,13 @@ the test. The suite asserts the contract order (`ready` → `partial` → `segme
 the two ways a session ends (`stop` flushes, `cancel` discards) and the error envelope.
 """
 
+import asyncio
+
 import pytest
 from fastapi.testclient import TestClient
 from starlette.websockets import WebSocketDisconnect
 
+from app.api.v1.voice import interpret
 from app.application.interpreter import InterpreterService
 from app.core.dependencies import get_ws_interpreter_service
 from app.domain.errors import LlmUnavailable
@@ -138,3 +141,45 @@ def test_a_translation_failure_keeps_the_segment(
     assert any(
         event["type"] == "error" and event["error"]["code"] == "llm_unavailable" for event in events
     )
+
+
+class _NoEventInterpreter:
+    """A service double that closes the session without yielding any event."""
+
+    async def events(self, audio, *, source, target):
+        for event in ():
+            yield event
+
+
+class _ClosingWebSocket:
+    """A WebSocket double whose final close behaves like a client that already disconnected."""
+
+    query_params = {"source": "fr", "target": "es"}
+
+    def __init__(self, close_error: Exception) -> None:
+        self.close_error = close_error
+        self.sent: list[dict] = []
+
+    async def accept(self) -> None:
+        return None
+
+    async def send_json(self, payload: dict) -> None:
+        self.sent.append(payload)
+
+    async def close(self, code: int = 1000, reason: str | None = None) -> None:
+        raise self.close_error
+
+
+def test_a_client_disconnect_during_cleanup_does_not_escape() -> None:
+    websocket = _ClosingWebSocket(WebSocketDisconnect(code=1006))
+
+    asyncio.run(interpret(websocket, _NoEventInterpreter()))
+
+    assert websocket.sent[0]["type"] == "ready"
+
+
+def test_an_unexpected_close_error_is_not_hidden() -> None:
+    websocket = _ClosingWebSocket(ValueError("unexpected close failure"))
+
+    with pytest.raises(ValueError, match="unexpected close failure"):
+        asyncio.run(interpret(websocket, _NoEventInterpreter()))

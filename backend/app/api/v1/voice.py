@@ -14,6 +14,7 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, File, Form, Response, WebSocket, WebSocketDisconnect
 from pydantic import BaseModel, Field, StringConstraints
+from starlette.websockets import WebSocketDisconnected
 
 from app.application.interpreter import (
     ErrorEvent,
@@ -218,7 +219,7 @@ async def _close_with_error(
     try:
         await websocket.send_json(_error_payload(request_id, code, message, details))
         await websocket.close(code=close_code, reason=code)
-    except (WebSocketDisconnect, RuntimeError):
+    except (WebSocketDisconnect, WebSocketDisconnected):
         return
 
 
@@ -322,5 +323,6 @@ async def interpret(
             close_code = 1000
         try:
             await websocket.close(code=close_code, reason="cancelled" if cancelled else "stopped")
-        except RuntimeError:
+        except (WebSocketDisconnect, WebSocketDisconnected):
+            # The client may have gone away before this cleanup; the session is already over.
             pass
