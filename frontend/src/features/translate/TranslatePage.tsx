@@ -271,6 +271,12 @@ function InterpreterPanel() {
     interpreter.status === "connecting" ||
     interpreter.status === "listening" ||
     interpreter.status === "processing";
+  const permissionError = interpreter.permissionDenied;
+
+  const retryMicrophone = () => {
+    if (!target) return;
+    void interpreter.start(source || null, target);
+  };
 
   if (languageStatus === "loading" && languages.length === 0) {
     return <LoadingState label="Cargando tus idiomas…" />;
@@ -352,7 +358,7 @@ function InterpreterPanel() {
         </span>
 
         <div className="interpreter__actions">
-          {!running && (
+          {!running && !interpreter.error && (
             <button
               type="button"
               className="translate__button translate__button--primary"
@@ -376,12 +382,32 @@ function InterpreterPanel() {
         </div>
       </div>
 
+      {interpreter.error && (
+        <div className="interpreter__error" role="alert">
+          <p>{interpreter.error}</p>
+          {permissionError && (
+            <p className="interpreter__error-help">
+              Abrí los permisos del sitio en el navegador (el ícono junto a la dirección), habilitá
+              el micrófono y reintentá. La app no puede abrir esa configuración por vos.
+            </p>
+          )}
+          {!running && (
+            <button
+              type="button"
+              className="translate__button"
+              onClick={retryMicrophone}
+              disabled={!target}
+            >
+              {permissionError ? "Reintentar micrófono" : "Reintentar"}
+            </button>
+          )}
+        </div>
+      )}
+
       <Notice live>
         La latencia y la precisión varían según el audio y la conexión. El audio no se guarda: se
         transcribe, se traduce y se descarta.
       </Notice>
-
-      {interpreter.error && <Notice live>{interpreter.error}</Notice>}
 
       <section className="interpreter__transcript" aria-live="polite">
         {interpreter.segments.length === 0 && !interpreter.partialText && !interpreter.partialPending ? (

@@ -19,7 +19,10 @@ export type VoiceStatus = "idle" | "recording" | "transcribing";
 
 export interface VoiceError {
   message: string;
-  /** `permissions` offers «Revisar permisos»; anything else offers «Reintentar». */
+  /**
+   * `permissions` offers «Reintentar micrófono» after the user enables the permission in the
+   * browser; anything else offers «Reintentar» for the failed request.
+   */
   kind: "permissions" | "failure";
 }
 
@@ -31,7 +34,7 @@ interface UseVoiceInputOptions {
 }
 
 const PERMISSION_MESSAGE =
-  "No tenemos permiso para usar el micrófono. Revisá los permisos del navegador para este sitio.";
+  "No tenemos permiso para usar el micrófono. Abrí los permisos del sitio en el navegador (el ícono junto a la dirección), habilitá el micrófono y volvé a intentar.";
 
 export function useVoiceInput({ languageCode, onTranscript }: UseVoiceInputOptions) {
   const recorderRef = useRef<VoiceRecorder | null>(null);

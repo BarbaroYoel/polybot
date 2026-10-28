@@ -105,6 +105,34 @@
 }
 
 @media (max-width: 639px) {
+  /* Two compact rows instead of squeezing the greeting next to the controls: at 375px the title
+     used to wrap into four lines. The greeting gets the full width on its own row. */
+  .topbar {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    grid-template-areas:
+      "menu context actions"
+      "greeting greeting greeting";
+    row-gap: var(--space-2);
+  }
+
+  .topbar__menu {
+    grid-area: menu;
+  }
+
+  .topbar__greeting {
+    grid-area: greeting;
+  }
+
+  .topbar__context {
+    grid-area: context;
+    justify-self: center;
+  }
+
+  .topbar__actions {
+    grid-area: actions;
+  }
+
   .topbar__context-name {
     display: none;
   }

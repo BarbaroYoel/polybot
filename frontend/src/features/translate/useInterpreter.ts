@@ -48,6 +48,7 @@ function recordingMessage(error: unknown): string {
 export function useInterpreter() {
   const [status, setStatus] = useState<InterpreterStatus>("idle");
   const [error, setError] = useState<string | null>(null);
+  const [permissionDenied, setPermissionDenied] = useState(false);
   const [partialText, setPartialText] = useState("");
   const [partialPending, setPartialPending] = useState("");
   const [partialTranslation, setPartialTranslation] = useState("");
@@ -94,6 +95,7 @@ export function useInterpreter() {
       if (socketRef.current || recorderRef.current) return;
 
       setError(null);
+      setPermissionDenied(false);
       setPartialText("");
       setPartialPending("");
       setPartialTranslation("");
@@ -151,6 +153,7 @@ export function useInterpreter() {
           updateStatus("listening");
         } catch (caught: unknown) {
           recorderRef.current = null;
+          setPermissionDenied(caught instanceof RecordingError && caught.kind === "denied");
           setError(recordingMessage(caught));
           updateStatus("error");
           try {
@@ -302,6 +305,7 @@ export function useInterpreter() {
   return {
     status,
     error,
+    permissionDenied,
     partialText,
     partialPending,
     partialTranslation,

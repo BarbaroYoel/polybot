@@ -80,7 +80,21 @@ export function ChatComposer({
       {voice.error && (
         <p className="composer__error" role="alert">
           {voice.error.message}
-          {voice.error.kind === "failure" && (
+          {voice.error.kind === "permissions" ? (
+            <>
+              {" "}
+              La app no puede abrir esa configuración por vos.{" "}
+              <button
+                type="button"
+                className="composer__link"
+                onClick={() => void voice.start()}
+                disabled={busy}
+                title={busy ? "Esperá a que termine la respuesta para hablar" : undefined}
+              >
+                Reintentar micrófono
+              </button>
+            </>
+          ) : (
             <>
               {" "}
               <button type="button" className="composer__link" onClick={() => void voice.retry()}>
