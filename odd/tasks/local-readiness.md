@@ -30,6 +30,9 @@ Sin despliegue público, autenticación nueva ni cambio de framework de testing.
 - `npm run build`: Vite 7.3.7, 97 módulos, build correcto en 3,10 s.
 - `npm audit`: **cero vulnerabilidades**.
 - `git diff --check`: limpio antes de integrar.
+- Integración por fast-forward en `main`, sin push. Arranque y sonda de permisos, reproducción y
+  WebSocket repetidos desde `main`; sin excepciones en el log del backend y sin cambios en los
+  conteos de la base original.
 
 ### Dependencias
 
@@ -88,6 +91,10 @@ y `/tmp/opencode/f7-t6/`; no contienen credenciales y no son requisitos para arr
   primer texto. La latencia depende del proveedor, no se promete conversación instantánea.
 - El intérprete sigue segmentando cada 4,5 s con solape; puede partir frases y no reproduce su
   traducción por voz (ADR-022).
+- La calidad del proveedor no es determinista: en la última sonda un segmento en inglés volvió
+  sin traducir pese al destino español. Repetir ese mismo texto por `/translate` sí produjo
+  español, al igual que otras dos frases de control. Es un límite observado del modelo, no una
+  garantía de traducción perfecta; la captura por ventanas también puede degradar la transcripción.
 - Se instalaron las cuatro voces autorizadas. Italiano, neerlandés y polaco requieren sus modelos
   adicionales; sin ellos el error es `voice_not_available`.
 - No se decidió una suite de tests de frontend; las sondas de navegador no sustituyen esa decisión.
