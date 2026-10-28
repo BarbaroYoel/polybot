@@ -10,7 +10,7 @@ con una propuesta explícita. Un agente no promueve una propuesta a decisión po
 | Backend | **FastAPI** (Python) | Prioridad: escalabilidad y API tipada con OpenAPI. |
 | Texto → audio (TTS) | **Piper**, por **binario y subproceso** (2026-10-23) | Voces por idioma en `data/piper-voices`; síntesis local con caché por contenido; sin dependencias Python (ADR-016). |
 | Producto | PWA de tutor de idiomas centrada en el chat | Ver `desing.md`. |
-| Frontend | **React 18 + Vite + TypeScript**, CSS propio sobre los tokens de `desing.md` §3, `react-router-dom` | Sin librería de UI ni framework de CSS. |
+| Frontend | **React 18 + Vite 7 + TypeScript**, CSS propio sobre los tokens de `desing.md` §3, `react-router-dom` 7 | Sin librería de UI ni framework de CSS. Actualización de seguridad autorizada: ADR-023. |
 | UI | Español, monocromática minimalista | Wireframe en grises; marca definitiva fuera de alcance. |
 | Acoplamiento | Frontend independiente del harness | La UI solo habla HTTP/SSE con la API. |
 | Base de datos (2026-10-22) | **SQLite** (`sqlite+aiosqlite`) | Único motor en v0 (ADR-012). PostgreSQL queda como decisión aparte. |

@@ -576,8 +576,28 @@ los valores absolutos varían; la discontinuidad de ~5 s se repitió en todas la
 
 ---
 
+## ADR-023 — Actualizar Vite y React Router para el uso privado
+
+**Estado:** aceptada · **Fecha:** 2026-10-28 · **Decide:** estabilización local autorizada por el humano
+
+**Contexto.** La auditoría de las versiones originales encontró cuatro vulnerabilidades, incluidas
+dos en dependencias de producción de React Router. No había corrección completa dentro de las
+versiones mayores instaladas. El usuario autorizó expresamente las actualizaciones mayores,
+con adaptación y verificación de los flujos existentes.
+
+**Decisión.** Actualizar Vite a `^7.3.7` y `react-router-dom` a `^7.18.5`, con lockfile versionado.
+Se conservan React 18, `@vitejs/plugin-react` 4.7.0 (compatible con Vite 7), CSS propio, las rutas y
+los proxies HTTP/WebSocket existentes. No se agrega framework ni servicio nuevo.
+
+**Consecuencias.** `npm audit` y su variante `--omit=dev` quedan en cero vulnerabilidades en la
+verificación del 2026-10-28; esto no garantiza que no aparezcan avisos futuros. Vite 7 requiere
+Node 20.19+ en la rama 20, o Node 22.12+; se recomienda una rama LTS soportada. La actualización se
+verifica con typecheck, build y sondas reales de navegador, no solo por compatibilidad de tipos.
+Se mantiene pendiente la decisión sobre la suite automatizada de frontend.
+
+---
+
 ## Precedencia entre el documento y el wireframe
 
 Si el texto de `desing.md` y la imagen `grayscale_language_tutor_chat_ui.png` difieren: **manda el texto**.
 La imagen aporta composición y proporciones; las reglas de comportamiento, estados y valores viven en el documento.
-
