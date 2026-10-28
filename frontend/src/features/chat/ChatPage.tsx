@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { Notice } from "../../components/Notice";
 import { EmptyState, ErrorState, LoadingState } from "../../components/States";
+import { answerBlock } from "../../lib/api/blocks";
 import { sendMessage, streamTurn } from "../../lib/api/chat";
 import { errorMessage, isApiError, toApiError } from "../../lib/api/client";
 import { getConversation } from "../../lib/api/conversations";
@@ -10,13 +11,16 @@ import type {
   ConversationDetail,
   Correction as ApiCorrection,
   Message as ApiMessage,
+  TurnBlock as ApiTurnBlock,
   VocabularyItem as ApiVocabularyItem,
 } from "../../lib/api/types";
 import { useActiveLanguage } from "../../lib/language";
 import type {
   ChatTurn,
   Correction,
+  DrillResult,
   Message,
+  PracticeBlock,
   ThreadItem,
   VocabularyItem,
 } from "../../lib/types";
@@ -55,12 +59,28 @@ function toUiVocabulary(item: ApiVocabularyItem): VocabularyItem {
 }
 
 /**
+ * Contract block → practice block (ADR-020). An `unknown` kind is not a rendering error: it is the
+ * visible result of a newer API talking to this build, and the reply around it stays readable.
+ */
+function toUiBlock(block: ApiTurnBlock): PracticeBlock {
+  const raw = block as { id: string; kind: string; text?: unknown; prompt?: unknown };
+  if (raw.kind === "phrase" && typeof raw.text === "string") {
+    return { id: raw.id, kind: "phrase", text: raw.text };
+  }
+  if (raw.kind === "drill" && typeof raw.prompt === "string") {
+    return { id: raw.id, kind: "drill", prompt: raw.prompt };
+  }
+  return { id: raw.id, kind: "unknown" };
+}
+
+/**
  * Contract message (snake_case) → thread message (camelCase UI type). The feedback of the closing
  * turn travels with the user message, so a reload paints the cards again (F3 S7).
  */
 function toUiMessage(message: ApiMessage): Message {
   const corrections = (message.feedback?.corrections ?? []).map(toUiCorrection);
   const vocabulary = (message.feedback?.vocabulary ?? []).map(toUiVocabulary);
+  const blocks = (message.blocks ?? []).map(toUiBlock);
   return {
     id: message.id,
     author: message.author,
@@ -69,6 +89,7 @@ function toUiMessage(message: ApiMessage): Message {
     timeLabel: formatTime(message.created_at),
     corrections: corrections.length > 0 ? corrections : undefined,
     vocabulary: vocabulary.length > 0 ? vocabulary : undefined,
+    blocks: blocks.length > 0 ? blocks : undefined,
   };
 }
 
@@ -266,9 +287,15 @@ export function ChatPage() {
             },
             onMessageEnd: (message) => {
               // Authoritative message, already persisted as `sent` (contract §3). The close events
-              // (`correction`, `vocabulary`) still arrive after it, so the turn waits for the end.
+              // (`blocks`, `correction`, `vocabulary`) still arrive after it, so the turn waits.
               settled = true;
               publish({ tutor: toUiMessage(message) });
+            },
+            onBlocks: (_tutorMessageId, items) => {
+              // ADR-020: the blocks belong to the reply; the event arrives once they are stored.
+              const tutor = snapshot.tutor;
+              if (!tutor) return;
+              publish({ tutor: { ...tutor, blocks: items.map(toUiBlock) } });
             },
             onCorrections: (_userMessageId, corrections) => {
               publish({
@@ -373,6 +400,18 @@ export function ChatPage() {
     [conversationId],
   );
 
+  /**
+   * Grades one drill of the thread (ADR-020). The verdict is not stored: it lives in the message
+   * component, so a reload asks the question again instead of showing a fake history.
+   */
+  const handleAnswerBlock = useCallback(
+    async (messageId: string, blockId: string, answer: string): Promise<DrillResult> => {
+      if (!conversationId) throw new Error("block_not_ready");
+      return answerBlock(conversationId, messageId, blockId, answer);
+    },
+    [conversationId],
+  );
+
   const recovery = (
     <EmptyState
       title="No encontramos esa conversación"
@@ -460,6 +499,7 @@ export function ChatPage() {
               onRetry={handleRetry}
               onTranslateMessage={handleTranslateMessage}
               onTranslateFragment={handleTranslateFragment}
+              onAnswerBlock={handleAnswerBlock}
               languageCode={conversationLanguage?.code}
             />
           )}

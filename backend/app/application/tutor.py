@@ -20,6 +20,7 @@ import logging
 from collections.abc import AsyncIterator, Awaitable, Callable
 from dataclasses import dataclass
 
+from app.domain.blocks import TurnBlock
 from app.domain.entities import (
     Conversation,
     LanguageProfile,
@@ -92,7 +93,33 @@ class TurnFeedbackReady:
     feedback: TurnFeedback
 
 
-TurnEvent = TurnToken | TurnCompleted | TurnError | TurnFeedbackReady
+@dataclass(frozen=True, slots=True)
+class TurnBlocksReady:
+    """Practice blocks that belong to the tutor message (ADR-020).
+
+    They are emitted before the feedback events and only after the rows are committed, so the
+    client never renders a block the database does not have.
+    """
+
+    message_id: str
+    blocks: tuple[TurnBlock, ...]
+
+
+TurnEvent = TurnToken | TurnCompleted | TurnError | TurnBlocksReady | TurnFeedbackReady
+
+
+@dataclass(frozen=True, slots=True)
+class TurnClosure:
+    """What the closing step actually stored, so the events never announce a missing row.
+
+    Corrections and blocks are persisted separately: one can fail without taking the other with it
+    (S7 keeps the chat alive; ADR-020 keeps the blocks independent from the feedback row).
+    """
+
+    user_message_id: str
+    tutor_message_id: str
+    blocks: tuple[TurnBlock, ...]
+    feedback: TurnFeedback | None
 
 
 class TutorService:
@@ -191,9 +218,14 @@ class TutorService:
         yield TurnCompleted(message=message)
 
         # Only now: `message_end` already left, so nothing below can retract the turn (S7).
-        feedback = await self._close_turn(state, message.content)
-        if feedback is not None:
-            yield TurnFeedbackReady(message_id=state.user_message_id, feedback=feedback)
+        closure = await self._close_turn(state, message.content)
+        if closure is not None:
+            if closure.blocks:
+                yield TurnBlocksReady(message_id=closure.tutor_message_id, blocks=closure.blocks)
+            if closure.feedback is not None:
+                yield TurnFeedbackReady(
+                    message_id=closure.user_message_id, feedback=closure.feedback
+                )
 
     async def _store(self, message: Message, content: str, status: MessageStatus) -> Message:
         updated = await self._messages.update_message(message.id, content=content, status=status)
@@ -201,12 +233,16 @@ class TutorService:
         await self._commit()
         return updated
 
-    async def _close_turn(self, state: TurnState, reply: str) -> TurnFeedback | None:
-        """Corrections and vocabulary for the user message, or nothing when that step fails.
+    async def _close_turn(self, state: TurnState, reply: str) -> TurnClosure | None:
+        """Corrections, vocabulary and practice blocks, or whatever survived of them.
 
         S7: a broken closing call must not break the chat. The reply is already stored as `sent`
-        and `message_end` already left, so the stream simply ends without the feedback events and
+        and `message_end` already left, so the stream simply ends without the closing events and
         the conversation detail keeps `feedback: null` for that message.
+
+        ADR-020: the blocks belong to the tutor message and the feedback rows to the user message,
+        so each store is attempted on its own. A failed write is rolled back before the next one,
+        because a session poisoned by the first must not take the second down.
         """
         try:
             feedback = await self._llm.summarize_turn(state.turn, reply)
@@ -219,25 +255,49 @@ class TutorService:
             )
             return None
 
-        if feedback.is_empty:
-            # Nothing to correct and nothing new to learn: no rows, no events, `feedback: null`.
+        if feedback.is_empty and not feedback.has_blocks:
+            # Nothing to correct, nothing new to learn, nothing to practise: no rows, no events.
             return None
 
-        try:
-            await self._messages.save_feedback(
-                state.user_message_id, state.conversation.language_id, feedback
-            )
-            # Committed before the events: they announce rows that already exist.
-            await self._commit()
-        except Exception:
-            logger.warning(
-                "storing feedback for message %s failed",
-                state.user_message_id,
-                exc_info=True,
-            )
-            await self._discard()
+        blocks: tuple[TurnBlock, ...] = ()
+        if feedback.has_blocks:
+            try:
+                await self._messages.save_blocks(state.message.id, feedback.blocks)
+                # Committed before the event: it announces rows that already exist.
+                await self._commit()
+                blocks = tuple(feedback.blocks)
+            except Exception:
+                logger.warning(
+                    "storing blocks for message %s failed",
+                    state.message.id,
+                    exc_info=True,
+                )
+                await self._discard()
+
+        stored_feedback: TurnFeedback | None = None
+        if not feedback.is_empty:
+            try:
+                await self._messages.save_feedback(
+                    state.user_message_id, state.conversation.language_id, feedback
+                )
+                await self._commit()
+                stored_feedback = feedback
+            except Exception:
+                logger.warning(
+                    "storing feedback for message %s failed",
+                    state.user_message_id,
+                    exc_info=True,
+                )
+                await self._discard()
+
+        if not blocks and stored_feedback is None:
             return None
-        return feedback
+        return TurnClosure(
+            user_message_id=state.user_message_id,
+            tutor_message_id=state.message.id,
+            blocks=blocks,
+            feedback=stored_feedback,
+        )
 
     async def _abandon(self, message: Message, content: str) -> None:
         """Best effort: a cancelled request still records what the user already saw."""

@@ -1,6 +1,7 @@
 import { useRef, useState } from "react";
 import { Icon } from "../../components/Icon";
-import type { Correction, Message, VocabularyItem } from "../../lib/types";
+import type { Correction, DrillResult, Message, VocabularyItem } from "../../lib/types";
+import { TurnBlocks } from "./blocks/TurnBlocks";
 import { useSpeech } from "./useSpeech";
 
 interface ChatMessageProps {
@@ -11,6 +12,8 @@ interface ChatMessageProps {
   onTranslateMessage: (messageId: string) => Promise<string>;
   /** Translates a selected fragment; nothing is stored (S1, S2). */
   onTranslateFragment: (text: string) => Promise<string>;
+  /** Grades a drill of this message (ADR-020); `undefined` when the turn cannot be answered. */
+  onAnswerBlock?: (blockId: string, answer: string) => Promise<DrillResult>;
 }
 
 /**
@@ -89,6 +92,7 @@ export function ChatMessage({
   languageCode,
   onTranslateMessage,
   onTranslateFragment,
+  onAnswerBlock,
 }: ChatMessageProps) {
   const bubbleRef = useRef<HTMLDivElement>(null);
   // The last selection made inside this bubble. A click on the button can collapse the selection
@@ -218,6 +222,15 @@ export function ChatMessage({
             </p>
           )}
         </div>
+
+        {/* ADR-020: the blocks complement the reply, they never replace it. */}
+        {isTutor && !message.pending && (
+          <TurnBlocks
+            blocks={message.blocks ?? []}
+            languageCode={languageCode}
+            onAnswer={onAnswerBlock}
+          />
+        )}
 
         <div className="message__meta">
           {message.timeLabel && <time className="message__time">{message.timeLabel}</time>}

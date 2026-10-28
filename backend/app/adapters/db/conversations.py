@@ -1,5 +1,6 @@
 """Conversation and message persistence."""
 
+import json
 from collections.abc import Sequence
 from datetime import datetime
 from uuid import uuid4
@@ -15,6 +16,11 @@ from app.adapters.db.models import (
     VocabularyItemRow,
 )
 from app.core.dates import utc_now
+from app.domain.blocks import (
+    TurnBlock,
+    blocks_from_storage,
+    blocks_to_storage,
+)
 from app.domain.entities import (
     Conversation,
     ConversationMode,
@@ -52,7 +58,19 @@ def _to_message(row: MessageRow) -> Message:
         translation=row.translation,
         status=MessageStatus(row.status),
         created_at=row.created_at,
+        blocks=_stored_blocks(row.blocks_json),
     )
+
+
+def _stored_blocks(raw: str | None) -> tuple[TurnBlock, ...]:
+    """Blocks of a message, tolerating a row written by a version this one cannot read (ADR-020)."""
+    if not raw:
+        return ()
+    try:
+        items = json.loads(raw)
+    except json.JSONDecodeError:
+        return ()
+    return blocks_from_storage(items) if isinstance(items, list) else ()
 
 
 class SqlAlchemyConversationRepository:
@@ -195,6 +213,19 @@ class SqlAlchemyMessageRepository:
         if row is None:
             raise LookupError(message_id)
         row.translation = translation
+        await self._session.flush()
+        return _to_message(row)
+
+    async def save_blocks(self, message_id: str, blocks: Sequence[TurnBlock]) -> Message:
+        """Attach the practice blocks to the tutor message, replacing whatever it had (ADR-020).
+
+        A retried turn rewrites the same message, so the blocks are replaced instead of appended:
+        the thread never shows two versions of the same drill.
+        """
+        row = await self._session.get(MessageRow, message_id)
+        if row is None:
+            raise LookupError(message_id)
+        row.blocks_json = json.dumps(blocks_to_storage(blocks), ensure_ascii=False)
         await self._session.flush()
         return _to_message(row)
 

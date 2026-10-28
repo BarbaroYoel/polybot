@@ -1,5 +1,5 @@
 import { QUICK_ACTIONS } from "../../lib/fixtures";
-import type { ThreadItem } from "../../lib/types";
+import type { DrillResult, ThreadItem } from "../../lib/types";
 import { ChatMessage } from "./ChatMessage";
 
 interface ChatThreadProps {
@@ -9,6 +9,8 @@ interface ChatThreadProps {
   onRetry: (turnKey: string) => void;
   onTranslateMessage: (messageId: string) => Promise<string>;
   onTranslateFragment: (text: string) => Promise<string>;
+  /** Grades a drill of one message (ADR-020). */
+  onAnswerBlock: (messageId: string, blockId: string, answer: string) => Promise<DrillResult>;
   /** The conversation's language, so «Escuchar» uses the right voice (F4 S3). */
   languageCode?: string;
 }
@@ -19,6 +21,7 @@ export function ChatThread({
   onRetry,
   onTranslateMessage,
   onTranslateFragment,
+  onAnswerBlock,
   languageCode,
 }: ChatThreadProps) {
   const last = items.length > 0 ? items[items.length - 1] : null;
@@ -55,6 +58,9 @@ export function ChatThread({
               languageCode={languageCode}
               onTranslateMessage={onTranslateMessage}
               onTranslateFragment={onTranslateFragment}
+              onAnswerBlock={(blockId, answer) =>
+                onAnswerBlock(item.message.id, blockId, answer)
+              }
             />
 
             {index === items.length - 1 && showQuickActions && (

@@ -15,14 +15,19 @@ from app.api.v1.schemas import (
     ConversationOut,
     ConversationPage,
     ConversationUpdate,
+    DrillAnswerOut,
+    DrillAnswerRequest,
     MessageCreate,
     MessageFeedbackOut,
     MessageOut,
     MessagePage,
+    blocks_out,
 )
+from app.application.blocks import BlockService
 from app.application.conversations import ConversationService
 from app.application.translation import TranslationService
 from app.application.tutor import (
+    TurnBlocksReady,
     TurnCompleted,
     TurnError,
     TurnFeedbackReady,
@@ -31,6 +36,7 @@ from app.application.tutor import (
     TutorService,
 )
 from app.core.dependencies import (
+    get_block_service,
     get_conversation_service,
     get_translation_service,
     get_tutor_service,
@@ -150,6 +156,32 @@ async def translate_message(
     return MessageOut.from_entity(result.message, result.feedback)
 
 
+@router.post(
+    "/{conversation_id}/messages/{message_id}/blocks/{block_id}/answers",
+    response_model=DrillAnswerOut,
+    summary="Answer one drill of a turn (ADR-020)",
+    responses={
+        400: {"description": "`block_not_answerable` when the block is not a drill"},
+        404: {"description": "`conversation_not_found`, `message_not_found` or `block_not_found`"},
+    },
+)
+async def answer_block(
+    conversation_id: str,
+    message_id: str,
+    block_id: str,
+    payload: DrillAnswerRequest,
+    service: BlockService = Depends(get_block_service),
+) -> DrillAnswerOut:
+    """Grade the answer deterministically; nothing is stored, so a second attempt grades again."""
+    result = await service.answer(
+        conversation_id=conversation_id,
+        message_id=message_id,
+        block_id=block_id,
+        answer=payload.answer,
+    )
+    return DrillAnswerOut.from_entity(result)
+
+
 @router.get(
     "/{conversation_id}/stream",
     summary="Stream the tutor turn over SSE (F3)",
@@ -186,6 +218,15 @@ async def _turn_events(
         elif isinstance(event, TurnError):
             _, code, message = describe_domain_error(event.error)
             yield _sse("error", error_body(code, message, request_id=request_id))
+        elif isinstance(event, TurnBlocksReady):
+            # Before the feedback events: the blocks belong to the tutor message that just ended.
+            yield _sse(
+                "blocks",
+                {
+                    "message_id": event.message_id,
+                    "items": [item.model_dump(mode="json") for item in blocks_out(event.blocks)],
+                },
+            )
         elif isinstance(event, TurnFeedbackReady):
             # After `message_end`, and only now: the rows are committed before these leave (S7).
             for chunk in _feedback_events(event):

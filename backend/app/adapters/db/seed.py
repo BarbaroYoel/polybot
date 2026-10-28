@@ -5,6 +5,7 @@ nothing, so running it twice never duplicates history.
 """
 
 import asyncio
+import json
 import logging
 from datetime import datetime
 from typing import Any
@@ -220,6 +221,11 @@ async def _seed_lessons(session: AsyncSession) -> dict[str, int]:
                         position=exercise_position,
                         prompt=exercise.prompt,
                         explanation=exercise.explanation,
+                        kind=exercise.kind,
+                        # Only a choice exercise carries options; a written one stays NULL.
+                        options_json=json.dumps(exercise.options, ensure_ascii=False)
+                        if exercise.options
+                        else None,
                     )
                     exercise_rows.append(exercise_row)
                     answer_rows.extend(

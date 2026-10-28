@@ -18,7 +18,7 @@ con una propuesta explícita. Un agente no promueve una propuesta a decisión po
 | Gestor de paquetes Python (2026-10-22) | **`uv`** | Python `>=3.12`; `backend/uv.lock` versionado. |
 | Autenticación (2026-10-22) | **Sin auth en v0** | API abierta en local; se decide antes de exponerla (ADR-012, cierra Q5). |
 | Testing backend (2026-10-22) | **pytest + httpx** | `backend/tests/{unit,integration}`; la API se prueba sobre una base migrada. |
-| Motor del tutor (2026-10-23) | **Una instancia de Pi por turno**, detrás del puerto `LLM` | `pi --print --mode json` con herramientas y contexto apagados; sin SDK ni claves propias (ADR-013). |
+| Motor del tutor (2026-10-23) | **Pi por defecto; OpenCode alternativo** (2026-10-26), detrás del puerto `LLM` | `LLM_PROVIDER` elige el adaptador. Pi: `pi --print --mode json` con herramientas apagadas (ADR-013). OpenCode: `opencode run` con agente `plan` y modelo configurable (ADR-019). |
 | Streaming de texto (2026-10-23) | **SSE** para el chat; WebSocket solo para el intérprete | Eventos `token`, `message_end`, `correction`, `vocabulary`, `error` (ADR-013). |
 | Traducción de mensajes y fragmentos (2026-10-23) | Un turno corto del mismo puerto `LLM` (`translate.v1`) | Solo el mensaje completo se persiste; el fragmento es efímero (ADR-014). |
 | Audio → texto (STT) (2026-10-23) | **Whistle** (Cactus Compute), local en el backend vía `cactus-needle` | CPU, streaming, 7 idiomas; detrás de un puerto `STT` (ADR-015). |

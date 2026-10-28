@@ -1,11 +1,13 @@
-"""Tutor prompts, versioned in the repository (F3 S3, S7).
+"""Tutor prompts, versioned in the repository (F3 S3, S7, ADR-020).
 
-Two prompt artifacts live here:
+Three prompt artifacts live here:
 
 - `tutor.v1.md` + `turn.v1.txt`: the system prompt with the tutor rules and the turn template that
   frames the history and the new message.
-- `feedback.v1.md`: the closing-turn prompt. It carries both halves in one versioned file (the
+- `feedback.v2.md`: the closing-turn prompt. It carries both halves in one versioned file (the
   system rules and the turn template after a marker) so the closing behavior changes in one diff.
+  `feedback.v1.md` stays in the tree as the version that closed a turn without practice blocks.
+- `translate.v1.md` and `lesson-review.v1.md`: the two short, single-purpose prompts.
 
 `PROMPT_VERSION` and `PROMPT_VERSION_FEEDBACK` are asserted by the tests so a change in behavior is
 visible in the diff.
@@ -25,7 +27,7 @@ from app.ports.llm import (
 )
 
 PROMPT_VERSION = "tutor.v1"
-PROMPT_VERSION_FEEDBACK = "feedback.v1"
+PROMPT_VERSION_FEEDBACK = "feedback.v2"
 PROMPT_VERSION_TRANSLATION = "translate.v1"
 PROMPT_VERSION_LESSON_REVIEW = "lesson-review.v1"
 

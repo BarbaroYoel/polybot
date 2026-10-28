@@ -19,10 +19,13 @@ from app.adapters.db.lessons import (
     SqlAlchemyLessonRepository,
 )
 from app.adapters.db.plans import SqlAlchemyStudyPlanRepository
+from app.adapters.db.progress import SqlAlchemyProgressRepository
+from app.application.blocks import BlockService
 from app.application.conversations import ConversationService
 from app.application.languages import LanguageService
 from app.application.lessons import LessonService
 from app.application.plans import PlanService
+from app.application.progress import ProgressService
 from app.application.translation import TranslationService
 from app.application.tutor import TutorService
 from app.application.voice import VoiceService
@@ -82,6 +85,16 @@ async def get_voice_service(
     return VoiceService(stt=stt, tts=tts)
 
 
+async def get_block_service(
+    session: AsyncSession = Depends(get_session),
+) -> BlockService:
+    """Answering a drill needs the stored block, not the model: grading is deterministic."""
+    return BlockService(
+        conversations=SqlAlchemyConversationRepository(session),
+        messages=SqlAlchemyMessageRepository(session),
+    )
+
+
 async def get_translation_service(
     session: AsyncSession = Depends(get_session),
     llm: LlmPort = Depends(get_llm),
@@ -114,6 +127,17 @@ async def get_plan_service(
     """Plans need no model: the schedule follows the catalog and the real attempts (F5 S3, S4)."""
     return PlanService(
         plans=SqlAlchemyStudyPlanRepository(session),
+        lessons=SqlAlchemyLessonRepository(session),
+        languages=SqlAlchemyLanguageRepository(session),
+    )
+
+
+async def get_progress_service(
+    session: AsyncSession = Depends(get_session),
+) -> ProgressService:
+    """Progress needs no model: it reads conversations, attempts, corrections and vocabulary."""
+    return ProgressService(
+        progress=SqlAlchemyProgressRepository(session),
         lessons=SqlAlchemyLessonRepository(session),
         languages=SqlAlchemyLanguageRepository(session),
     )

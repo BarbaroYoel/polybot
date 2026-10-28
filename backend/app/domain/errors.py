@@ -25,6 +25,14 @@ class InvalidTurnMessage(DomainError):
     """Only a user message starts a tutor turn (F3)."""
 
 
+class BlockNotFound(DomainError):
+    """The message has no block with that id, or it belongs to another conversation (ADR-020)."""
+
+
+class BlockNotAnswerable(DomainError):
+    """The block is not a drill: only an exercise is answered (ADR-020)."""
+
+
 class LanguageAlreadyExists(DomainError):
     pass
 
@@ -87,3 +95,7 @@ class PlanNotFound(DomainError):
 
 class PlanAlreadyExists(DomainError):
     """The language already has a plan: one per language, adjusted instead of duplicated (S4)."""
+
+
+class InvalidTimezone(DomainError):
+    """The `tz` of `/progress` is not an IANA zone, so the weekly window cannot be computed (F6)."""

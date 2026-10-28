@@ -4,16 +4,17 @@ PWA de tutor de idiomas guiada por IA, centrada en el chat, con la voz como capa
 clase. Un solo idioma activo a la vez; conversaciones, lecciones, planes y progreso aislados por
 idioma.
 
-**Estado:** F4 (voz) completada; F5 (lecciones y planes) completada en la rama
-`feat/f5-lessons-plans` (`8ba8964`, `00d8dcb`). La fuente de verdad del avance y de la evidencia de
-cada fase es [`docs/roadmap.md`](./docs/roadmap.md); el detalle tarea por tarea está en
-[`odd/tasks/`](./odd/tasks).
+**Estado:** F1–F6 completas. F6 (progreso) está en la rama `feat/f6-progress`, con `uv run pytest`
+(221 passed), Ruff, typecheck y build verdes, más una sonda HTTP contra una base aislada. La fuente de
+verdad del avance y de la evidencia de cada fase es [`docs/roadmap.md`](./docs/roadmap.md); el
+detalle tarea por tarea está en [`odd/tasks/`](./odd/tasks). F7 está pendiente.
 
 Lo que ya funciona de punta a punta: la PWA lee idiomas y conversaciones de la API, conversa con el
 tutor en tiempo real por SSE, pide correcciones y vocabulario al cerrar cada turno, traduce un mensaje
 o un fragmento seleccionado, transcribe y reproduce voz con motores locales, y completa lecciones con
 corrección determinista, errores, vocabulario y planes de estudio por semanas con el estado de cada
-sesión derivado de los intentos.
+sesión derivado de los intentos, y consulta su progreso real por idioma: lecciones completadas, meta
+semanal de conversaciones, actividad por destreza, errores frecuentes e historial.
 
 ## Requisitos
 
@@ -21,7 +22,8 @@ sesión derivado de los intentos.
 |---|---|---|
 | Python 3.13 + [uv](https://docs.astral.sh/uv/) | backend | `uv sync` instala todo |
 | Node 20+ | frontend | solo el frontend |
-| [Pi](https://github.com/badlogic/pi) en el `PATH` | el tutor es una instancia de Pi por turno (ADR-013) | sin Pi en el `PATH`, el chat y la traducción responden `llm_unavailable`, y la lección se corrige igual sin comentario; idiomas, catálogo y planes siguen funcionando |
+| [Pi](https://github.com/badlogic/pi) en el `PATH` | tutor por defecto (ADR-013) | sin Pi en el `PATH`, el chat y la traducción responden `llm_unavailable`, y la lección se corrige igual sin comentario; idiomas, catálogo y planes siguen funcionando |
+| [OpenCode](https://opencode.ai) CLI (`opencode`) | tutor alternativo (ADR-019) | activalo con `LLM_PROVIDER=opencode`; requiere un proveedor/modelo ya autenticado en OpenCode (`OPENCODE_MODEL`) |
 | Piper (binario) + voces | audio de salida (ADR-016) | opcional: sin él, `/voice/speech` responde `tts_unavailable` |
 | `cactus-needle` | audio de entrada, modelo Whistle (ADR-015) | entra por `uv sync`; el modelo se baja con el primer uso |
 
@@ -46,7 +48,17 @@ npm run dev
 ```
 
 `VITE_API_BASE_URL` (en `frontend/.env`) cambia el destino de la API. La plantilla de variables del
-backend está en [`docs/env.example`](./docs/env.example).
+backend está en [`docs/env.example`](./docs/env.example); copiala a `.env` y ajustá el proveedor del
+tutor. Por defecto usa **Pi**; para usar **OpenCode**:
+
+```dotenv
+LLM_PROVIDER=opencode
+OPENCODE_MODEL=proveedor/modelo
+OPENCODE_AGENT=plan
+```
+
+`OPENCODE_MODEL` es obligatorio en la práctica: cada instalación de OpenCode autoriza proveedores
+distintos y su modelo por defecto puede no estar habilitado (ADR-019).
 
 ## Checks
 
@@ -68,7 +80,7 @@ motores de voz se reemplazan por dobles. Los comandos válidos están en [`AGENT
 | [`docs/stack.md`](./docs/stack.md) | Qué está decidido y qué falta decidir. |
 | [`docs/api-contract.md`](./docs/api-contract.md) | Contrato entre frontend y backend. |
 | [`docs/conventions.md`](./docs/conventions.md) | Código, tests, commits, idioma de artefactos. |
-| [`docs/decisions.md`](./docs/decisions.md) | ADRs aceptadas (ADR-001 a ADR-017). |
+| [`docs/decisions.md`](./docs/decisions.md) | ADRs aceptadas (ADR-001 a ADR-019). |
 | [`docs/open-questions.md`](./docs/open-questions.md) | Decisiones de producto/UI todavía abiertas. |
 | [`docs/roadmap.md`](./docs/roadmap.md) | Fases F0–F7, qué se verificó en cada una y qué falta. |
 | [`odd/tasks/`](./odd/tasks) | Una ficha por feature: specs, tareas, commits y evidencia. |
@@ -78,9 +90,9 @@ motores de voz se reemplazan por dobles. Los comandos válidos están en [`AGENT
 
 Frontend **React 18 + Vite + TypeScript**, CSS propio sobre los tokens de `desing.md` §3.
 Backend **FastAPI** con capas `domain → application → adapters`, **SQLite** por SQLAlchemy 2 + Alembic.
-Tutor: **una instancia de Pi por turno** detrás del puerto `LLM`. Voz: **Whistle** local (STT) y
-**Piper** por binario (TTS), detrás de los puertos `STT` y `TTS`. La UI no conoce ningún orquestador:
-solo habla con la API.
+Tutor: **Pi por defecto u OpenCode como alternativa**, elegido con `LLM_PROVIDER` (ADR-013,
+ADR-019). Voz: **Whistle** local (STT) y **Piper** por binario (TTS), detrás de los puertos `STT` y
+`TTS`. La UI no conoce ningún orquestador: solo habla con la API.
 
 Las decisiones y sus motivos están en [`docs/decisions.md`](./docs/decisions.md); cada una dice qué
 alternativa se descartó y por qué.

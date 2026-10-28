@@ -305,6 +305,46 @@
   color: var(--text-secondary);
 }
 
+/* ADR-021: a choice is a radio group of full-width options, not a dropdown: the four options are
+   part of the exercise and reading them is the exercise. */
+.practice__choice {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.practice__option {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  min-height: var(--control-height);
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  background: var(--bg-app);
+  cursor: pointer;
+}
+
+.practice__option:has(input:checked) {
+  border-color: var(--accent-neutral);
+  background: var(--bg-surface);
+}
+
+.practice__option:has(input:disabled) {
+  cursor: default;
+}
+
+.practice__option input {
+  accent-color: var(--accent-neutral);
+}
+
+.practice__option-text {
+  font-size: 15px;
+}
+
 .practice__actions {
   display: flex;
   align-items: center;

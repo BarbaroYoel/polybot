@@ -16,22 +16,6 @@ export function TranslatePage() {
   );
 }
 
-export function ProgressPage() {
-  return (
-    <SectionPage
-      title="Progreso"
-      description="Feedback útil del idioma activo sin convertirse en un dashboard recargado."
-      phase="Vista base · F1"
-      items={[
-        "Nivel, sesiones completadas, tiempo practicado y meta semanal.",
-        "Evolución por destreza: lectura, escucha, conversación, escritura y vocabulario.",
-        "Errores frecuentes y elementos por repasar.",
-        "Historial de prácticas y lecciones, con criterios trazables para el nivel.",
-      ]}
-    />
-  );
-}
-
 export function SettingsPage() {
   return (
     <SectionPage

@@ -2,6 +2,7 @@
 
 from functools import cached_property
 from pathlib import Path
+from typing import Literal
 
 from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -29,10 +30,18 @@ class Settings(BaseSettings):
     cors_origins: str = "http://localhost:5173"
     database_url: str = DEFAULT_DATABASE_URL
 
-    # Tutor: a Pi instance per turn (F3, ADR-013). `pi_model` empty means the installed default.
+    # Tutor provider: the `LLM` port has one adapter per harness (ADR-013, ADR-019).
+    llm_provider: Literal["pi", "opencode"] = "pi"
     pi_bin_path: str = "pi"
     pi_model: str = ""
     pi_timeout_seconds: float = 60.0
+
+    # OpenCode adapter (ADR-019): the CLI talks to the background service, and the model is
+    # whatever the installation authorised. `plan` is read-only, so the tutor cannot edit files.
+    opencode_bin_path: str = "opencode"
+    opencode_model: str = ""
+    opencode_agent: str = "plan"
+    opencode_timeout_seconds: float = 90.0
 
     # Speech synthesis: the Piper binary and its voices are files on this machine (ADR-016).
     # An empty voices/speech directory means `data/piper-voices` and `data/speech` in the repo.
@@ -71,6 +80,27 @@ class Settings(BaseSettings):
     @cached_property
     def pi_model_or_none(self) -> str | None:
         return self.pi_model.strip() or None
+
+    @field_validator("opencode_bin_path")
+    @classmethod
+    def _empty_opencode_path_means_the_path_lookup(cls, value: str) -> str:
+        return value.strip() or "opencode"
+
+    @field_validator("opencode_timeout_seconds")
+    @classmethod
+    def _opencode_timeout_must_be_positive(cls, value: float) -> float:
+        if value <= 0:
+            raise ValueError("OPENCODE_TIMEOUT_SECONDS must be greater than zero")
+        return value
+
+    @field_validator("opencode_agent")
+    @classmethod
+    def _empty_agent_means_plan(cls, value: str) -> str:
+        return value.strip() or "plan"
+
+    @cached_property
+    def opencode_model_or_none(self) -> str | None:
+        return self.opencode_model.strip() or None
 
     @field_validator("piper_bin_path")
     @classmethod

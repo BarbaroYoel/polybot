@@ -359,6 +359,174 @@ contenido fijo no hay corrección que se pueda afirmar.
 - El contenido sembrado es de ejemplo y está marcado como tal: no es currículo validado por un
   docente.
 
+## ADR-018 — El progreso se deriva de señales reales, sin métricas inventadas
+
+**Estado:** aceptada · **Fecha:** 2026-10-26 · **Decide:** F6
+
+**Contexto.** `desing.md` §6.5 pide un resumen con «nivel, sesiones completadas, tiempo practicado y
+meta semanal», evolución de cinco destrezas y errores frecuentes. Lo persistido hasta F5 solo
+registra conversaciones y mensajes con fecha, intentos de lección con sus respuestas, correcciones
+del cierre de turno y términos sugeridos. No hay duración de sesiones, ni eventos de lectura, ni
+registro de reproducción de audio. La fecha del nivel también es un dato del perfil, no una medición.
+
+**Decisión.**
+
+1. **Sin minutos en v0.** No se estima ni se inventa «tiempo practicado»: la pantalla muestra nivel,
+   lecciones completadas y meta semanal de conversaciones. Medir duración real es una fase aparte.
+2. **Solo tres destrezas con señal real**: conversación (conversaciones con mensajes), escritura
+   (respuestas de ejercicios enviadas) y vocabulario (términos sugeridos). Lectura y escucha vuelven
+   `available: false` y la UI las muestra como «sin datos todavía», no como un cero medido.
+3. **Los errores frecuentes se agrupan, no se generan**: pares exactos de corrección del tutor y de
+   respuestas incorrectas de lecciones, ordenados por recurrencia con `language_id`.
+4. **El nivel es de solo lectura acá.** Se lee del `LanguageProfile` y se cambia únicamente en
+   `/languages` con acción explícita (ADR-008); Progreso no lo calcula, no lo propone y no lo mueve.
+5. **Sin esquema nuevo.** `GET /progress` es una vista de lectura sobre tablas existentes: no hay
+   migración ni escritura en F6.
+
+**Consecuencias.**
+
+- La pantalla puede decir «todavía no hay datos suficientes» sin mentir; es un estado de éxito, no un
+  error.
+- Los contadores miden **actividad registrada**, no dominio del idioma. La copia de la UI no debe
+  presentarlos como una evaluación de nivel.
+- «Vocabulario» cuenta términos sugeridos, no términos demostrados: se rotula como tal.
+- Cuando exista medición de duración o de escucha/lectura, se revisa este ADR y se agregan señales;
+  no se parchea la UI con estimaciones.
+
+## ADR-019 — OpenCode como adaptador alternativo del puerto `LLM`
+
+**Estado:** aceptada · **Fecha:** 2026-10-26 · **Decide:** cambio de proveedor del tutor pedido por el humano
+
+**Contexto.** El tutor se implementó sobre una instancia de Pi por turno (ADR-013), pero este entorno
+no tiene `pi` instalado: el chat y la traducción respondían `llm_unavailable`. OpenCode v2.1.4 sí está
+instalado y tiene un servicio en segundo plano con proveedores ya autenticados. La UI y
+`application/` no conocen el harness (ADR-004), así que el cambio corresponde a un adaptador.
+
+**Decisión.**
+
+1. Se agrega `OpenCodeCliAdapter` detrás del mismo `LlmPort`; dominio, casos de uso, contrato HTTP y
+   PWA no cambian.
+2. `LLM_PROVIDER=pi|opencode` elige el adaptador. El default sigue siendo `pi` para no romper
+   instalaciones existentes; este Codespace usa `opencode` en su `.env` local.
+3. Cada invocación ejecuta `opencode run --format json --agent plan -- <prompt>` en un directorio
+   temporal, con timeout y sin sesión persistente. El agente `plan` es de solo lectura y el prompt
+   completo viaja como mensaje, porque el CLI no tiene `--system-prompt`.
+4. `OPENCODE_MODEL` fija el modelo (`proveedor/modelo`); no se hardcodea ninguno, porque cada
+   instalación autoriza proveedores distintos. `OPENCODE_AGENT` y `OPENCODE_TIMEOUT_SECONDS` también
+   son configuración.
+5. El cierre del turno, la traducción y el comentario de lección reutilizan las mismas reglas de
+   validación (`adapters/llm/parsing.py`) que el adaptador Pi: cambiar de proveedor no cambia qué es
+   una respuesta usable.
+
+**Consecuencias.**
+
+- El tutor funciona sin Pi cuando OpenCode está instalado y autenticado; cambiar de uno a otro es
+  configuración, no código.
+- La calidad, latencia y costo dependen del modelo elegido en `OPENCODE_MODEL`. Si el modelo por
+  defecto de la instalación no está permitido (como pasó con el modelo Go por privacidad), hay que
+  fijarlo explícitamente.
+- El streaming llega por partes de texto del CLI, no necesariamente token por token: la UI recibe
+  deltas, pero el primer texto puede aparecer más tarde que con Pi.
+- `plan` es de solo lectura, pero OpenCode conserva sus herramientas de lectura: el aislamiento se
+  apoya en el directorio temporal y en el agente, no en un sandbox del sistema. Acotarlo con un
+  agente sin herramientas es una mejora futura.
+- Se suma el CLI de OpenCode como requisito del proveedor, no como dependencia Python. La suite lo
+  prueba con un fixture JSONL; la llamada real se verifica a mano.
+
+---
+
+## ADR-020 — Bloques de práctica tipados en el turno del tutor
+
+**Estado:** aceptada · **Fecha:** 2026-10-26 · **Decide:** F6.5
+
+**Contexto.** `desing.md` §6.1.2 ya prevé que una respuesta del tutor pueda traer «audio, ejercicios,
+traducciones, correcciones o tarjetas de vocabulario», pero hasta F6 solo las correcciones y el
+vocabulario eran datos estructurados (`Message.feedback`); el resto del turno era texto plano y el
+ejercicio de lección era un único tipo: escribir la frase (ADR-017). La idea de **interfaz
+inteligente** —el modelo responde con componentes interactivos en vez de párrafos— viene del
+proyecto pixelUI del mismo autor, donde el modelo llama `render_ui` y el cliente valida un árbol de
+bloques. Copiar ese mecanismo tal cual choca con ADR-004 y con `desing.md` §12: la UI no puede
+acoplarse a un harness.
+
+**Decisión.**
+
+1. Se agregan **bloques de práctica tipados** al mensaje del **tutor**: `phrase` (una frase para
+   escuchar) y `drill` (una pregunta con corrección determinista). El árbol es **chato**: 0 a 2
+   bloques, como máximo uno interactivo, sin anidar.
+2. **El modelo propone contenido, no interfaz.** No hay equivalente a `render_ui`: el modelo no elige
+   componente, layout ni jerarquía; llena campos de tipos conocidos. La validación y los límites
+   viven en `domain/blocks.py`, no en el prompt.
+3. Los bloques viajan en el **cierre de turno** ya existente (`feedback.v2`), no en una tercera
+   llamada: la latencia después de `message_end` no se duplica. El parseo es **tolerante por
+   sección**: si `blocks` viene mal, se descarta y las correcciones de ese turno se conservan.
+4. Se emiten como evento SSE `blocks`, **después** de `message_end` y **antes** de `correction` y
+   `vocabulary`, con el `message_id` del tutor. Se guardan con el mensaje (`messages.blocks_json`) y
+   `GET /conversations/{id}` los devuelve, así sobreviven a una recarga.
+5. Las **respuestas aceptadas de un drill nunca viajan al cliente** antes de responder. La respuesta
+   se corrige en `POST .../blocks/{block_id}/answers` con `domain/grading.py`, las mismas reglas que
+   una lección (ADR-017). `expected` solo se revela tras un fallo.
+6. El resultado del drill **no se persiste** en v0: es corrección sin estado, como el fragmento
+   traducido (ADR-014). Guardar intentos obligaría a decidir si son señal de `/progress` y a revisar
+   ADR-018, y esa no es esta fase.
+7. **Nada de gráficos, tablas ni métricas** en el chat: un tutor no es un dashboard, y ADR-018
+   prohíbe inventar mediciones.
+8. La PWA dibuja los `kind` conocidos con un registro de componentes y muestra un aviso discreto
+   ante un `kind` desconocido. Un bloque ilegible nunca rompe el hilo.
+
+**Consecuencias.**
+
+- El chat gana práctica real sin dejar de ser un chat: dos tarjetas como máximo y una sola
+  interacción abierta.
+- El contrato crece de forma aditiva (`Message.blocks`, evento `blocks`, un endpoint nuevo); ningún
+  cliente anterior se rompe, porque `blocks` ausente equivale a `[]`.
+- `feedback.v1.md` queda en el árbol como la versión que cerraba un turno sin bloques.
+- El drill reutiliza la corrección determinista y el audio de F4: no agrega dependencias ni motores.
+- La calidad depende de que el modelo devuelva JSON válido con la forma pedida. Si no lo hace, el
+  turno se ve como antes (solo texto) y el fallo queda en el log; no hay UI rota.
+- Ampliar tipos de bloque o de ejercicio de lección es una decisión nueva: este ADR fija dos bloques
+  y un tipo de drill, no una taxonomía definitiva.
+
+---
+
+## ADR-021 — Las lecciones admiten ejercicios de elección, con la misma corrección determinista
+
+**Estado:** aceptada · **Fecha:** 2026-10-26 · **Decide:** F6.6
+
+**Contexto.** ADR-017 fijó la práctica de la v0 en un solo tipo —producir texto en el idioma— y dejó
+dicho que ampliar los tipos es una decisión nueva. `desing.md` §6.2 pide «práctica interactiva» y el
+chat ya ganó bloques tipados (ADR-020); las lecciones seguían siendo un formulario de textos. El
+humano pidió que chat y lecciones compartan la idea de interfaz inteligente.
+
+**Decisión.**
+
+1. `LessonExercise` gana `kind`: `writing` (lo que ya existía) o `choice` (elegir una opción). Es
+   aditivo y con default `writing`, así que ninguna fila existente cambia de significado.
+2. Un `choice` ofrece entre 2 y 6 opciones, **sin repetir**, y tiene **exactamente una** respuesta
+   aceptada que además es una de sus opciones. Es una regla del contenido, no del renderer: el seed
+   la cumple y un test la vigila.
+3. **La corrección no cambia.** El cliente envía el texto elegido como `answer` y el servidor lo
+   compara con `domain/grading.py`, igual que una respuesta escrita. El tipo cambia el control, no
+   el criterio: mayúsculas, puntuación y espacios no cuentan; los acentos sí.
+4. La API devuelve `kind` y `options`; las respuestas aceptadas siguen sin viajar al cliente, y la
+   opción correcta no se marca de ninguna forma.
+5. La UI usa un **grupo de radios de ancho completo**, no un desplegable: leer las cuatro opciones es
+   parte del ejercicio. Componentes y tokens existentes; sin dependencias nuevas.
+6. El catálogo sembrado suma un `choice` por idioma dentro de una lección existente.
+
+**Consecuencias.**
+
+- Las lecciones se parecen al chat en la forma de practicar sin duplicar el motor de corrección: es
+  la misma función determinista para un drill del chat y para un ejercicio de lección.
+- El contrato crece de forma aditiva (`kind`, `options`); un cliente viejo que ignore los campos
+  sigue funcionando.
+- `order` (armar la oración) y `listen` (audio) quedan como decisiones aparte: este ADR fija dos
+  tipos, no una taxonomía cerrada.
+- El seed no refresca un catálogo ya sembrado (`_seed_lessons` salta los idiomas con unidades), así
+  que ver el contenido nuevo exige recrear la base local. Queda anotado como límite; no se cambió el
+  seed en esta fase.
+
+---
+
 ## Precedencia entre el documento y el wireframe
 
 Si el texto de `desing.md` y la imagen `grayscale_language_tutor_chat_ui.png` difieren: **manda el texto**.

@@ -1,7 +1,7 @@
 """Request and response models. They mirror docs/api-contract.md §2 field by field."""
 
 from collections.abc import Iterable, Mapping
-from typing import Annotated, Protocol
+from typing import Annotated, Literal, Protocol
 
 from pydantic import BaseModel, Field, StringConstraints, model_validator
 
@@ -14,11 +14,18 @@ from app.application.lessons import (
 )
 from app.application.pagination import Page
 from app.application.plans import PlanSessionEntry, PlanView
+from app.application.progress import ProgressSummary, ProgressView
 from app.core.dates import to_iso
+from app.domain.blocks import BlockKind, DrillAnswer, TurnBlock
 from app.domain.entities import (
     CefrLevel,
     Conversation,
     ConversationMode,
+    ExerciseKind,
+    FrequentError,
+    FrequentErrorKind,
+    HistoryEntry,
+    HistoryKind,
     LanguageProfile,
     LessonStatus,
     LessonTerm,
@@ -27,6 +34,8 @@ from app.domain.entities import (
     MessageAuthor,
     MessageStatus,
     PlanSessionState,
+    SkillId,
+    SkillProgress,
 )
 from app.domain.feedback import MessageFeedback
 from app.ports.llm import TurnFeedback
@@ -188,6 +197,61 @@ class MessageFeedbackOut(BaseModel):
         )
 
 
+class PhraseBlockOut(BaseModel):
+    """A sentence worth hearing again: the client synthesizes it with `/voice/speech` (ADR-020)."""
+
+    id: str
+    kind: Literal["phrase"]
+    text: str
+
+
+class DrillBlockOut(BaseModel):
+    """One question for the student.
+
+    `accepted_answers` and `explanation` are absent on purpose: the first would let a browser solve
+    the exercise by reading the payload, the second usually gives the answer away (ADR-020).
+    """
+
+    id: str
+    kind: Literal["drill"]
+    prompt: str
+
+
+BlockOut = Annotated[PhraseBlockOut | DrillBlockOut, Field(discriminator="kind")]
+
+
+def blocks_out(blocks: Iterable[TurnBlock]) -> list[BlockOut]:
+    """The public view of the stored blocks: no private field crosses this line."""
+    return [
+        PhraseBlockOut.model_validate(block.public())
+        if block.kind is BlockKind.PHRASE
+        else DrillBlockOut.model_validate(block.public())
+        for block in blocks
+    ]
+
+
+class DrillAnswerRequest(BaseModel):
+    """What the student typed for one drill; the API grades it, the client never sees the answer."""
+
+    answer: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=500)]
+
+
+class DrillAnswerOut(BaseModel):
+    """The verdict of one drill. `expected` is only revealed after a miss (ADR-020)."""
+
+    correct: bool
+    expected: str | None
+    explanation: str
+
+    @classmethod
+    def from_entity(cls, answer: DrillAnswer) -> "DrillAnswerOut":
+        return cls(
+            correct=answer.correct,
+            expected=answer.expected,
+            explanation=answer.explanation,
+        )
+
+
 class MessageOut(BaseModel):
     id: str
     conversation_id: str
@@ -196,6 +260,7 @@ class MessageOut(BaseModel):
     translation: str | None
     status: MessageStatus
     feedback: MessageFeedbackOut | None = None
+    blocks: list[BlockOut] = []
     created_at: str
 
     @classmethod
@@ -208,6 +273,7 @@ class MessageOut(BaseModel):
             translation=message.translation,
             status=message.status,
             feedback=MessageFeedbackOut.from_entity(feedback) if feedback is not None else None,
+            blocks=blocks_out(message.blocks),
             created_at=to_iso(message.created_at),
         )
 
@@ -337,11 +403,17 @@ class LessonCatalogOut(BaseModel):
 
 
 class LessonExerciseOut(BaseModel):
-    """One exercise as the student sees it: the prompt, never the accepted answers (S8)."""
+    """One exercise as the student sees it: the prompt and, for a choice, its options (ADR-021).
+
+    The accepted answers never travel: on a `choice` the options include the right one, and the
+    grading happens on the server.
+    """
 
     id: str
     position: int
     prompt: str
+    kind: ExerciseKind
+    options: list[str]
 
 
 class LessonDetailOut(BaseModel):
@@ -373,6 +445,8 @@ class LessonDetailOut(BaseModel):
                     id=exercise.id,
                     position=exercise.position,
                     prompt=exercise.prompt,
+                    kind=exercise.kind,
+                    options=list(exercise.options),
                 )
                 for exercise in detail.exercises
             ],
@@ -538,4 +612,136 @@ class LanguagePlanOut(BaseModel):
         return cls(
             language_id=language_id,
             plan=PlanOut.from_entity(view) if view is not None else None,
+        )
+
+
+class ProgressLanguageOut(BaseModel):
+    """The language whose progress is shown: its badge-level comes from the profile (F6 S5)."""
+
+    id: str
+    code: str
+    name: str
+    level: CefrLevel
+
+    @classmethod
+    def from_entity(cls, language: LanguageProfile) -> "ProgressLanguageOut":
+        return cls(
+            id=language.id,
+            code=language.code,
+            name=language.name,
+            level=language.level,
+        )
+
+
+class ProgressWeeklyGoalOut(BaseModel):
+    """Conversations of the current week against the goal stored in the profile (F6 S1)."""
+
+    conversations: int
+    target: int
+
+
+class ProgressSummaryOut(BaseModel):
+    """The stored level plus the counters the user can verify in their own history (F6 S1, S5)."""
+
+    level: CefrLevel
+    lessons_completed: int
+    lessons_total: int
+    conversations: int
+    weekly_goal: ProgressWeeklyGoalOut
+
+    @classmethod
+    def from_view(cls, summary: ProgressSummary) -> "ProgressSummaryOut":
+        return cls(
+            level=summary.level,
+            lessons_completed=summary.lessons_completed,
+            lessons_total=summary.lessons_total,
+            conversations=summary.conversations,
+            weekly_goal=ProgressWeeklyGoalOut(
+                conversations=summary.weekly_conversations,
+                target=summary.weekly_target,
+            ),
+        )
+
+
+class SkillProgressOut(BaseModel):
+    """One of the five skills; unavailable ones keep `count` and `last_at` null (F6 S2)."""
+
+    id: SkillId
+    available: bool
+    count: int | None
+    last_at: str | None
+
+    @classmethod
+    def from_entity(cls, skill: SkillProgress) -> "SkillProgressOut":
+        return cls(
+            id=skill.id,
+            available=skill.available,
+            count=skill.count,
+            last_at=to_iso(skill.last_at) if skill.last_at is not None else None,
+        )
+
+
+class FrequentErrorOut(BaseModel):
+    """One grouped, repeated mistake; `prompt` is null for tutor corrections (F6 S3)."""
+
+    kind: FrequentErrorKind
+    prompt: str | None
+    original: str
+    expected: str
+    count: int
+    last_at: str
+
+    @classmethod
+    def from_entity(cls, error: FrequentError) -> "FrequentErrorOut":
+        return cls(
+            kind=error.kind,
+            prompt=error.prompt,
+            original=error.original,
+            expected=error.expected,
+            count=error.count,
+            last_at=to_iso(error.last_at),
+        )
+
+
+class HistoryEntryOut(BaseModel):
+    """One history row: a lesson attempt with its score or a conversation with its messages."""
+
+    kind: HistoryKind
+    id: str
+    title: str
+    at: str
+    correct: int | None
+    total: int | None
+    message_count: int | None
+
+    @classmethod
+    def from_entity(cls, entry: HistoryEntry) -> "HistoryEntryOut":
+        return cls(
+            kind=entry.kind,
+            id=entry.id,
+            title=entry.title,
+            at=to_iso(entry.at),
+            correct=entry.correct,
+            total=entry.total,
+            message_count=entry.message_count,
+        )
+
+
+class ProgressOut(BaseModel):
+    """`GET /progress`: the whole screen, derived from stored activity (F6, ADR-018)."""
+
+    language: ProgressLanguageOut
+    summary: ProgressSummaryOut
+    skills: list[SkillProgressOut]
+    frequent_errors: list[FrequentErrorOut]
+    history: list[HistoryEntryOut]
+
+    @classmethod
+    def from_view(cls, view: ProgressView) -> "ProgressOut":
+        return cls(
+            language=ProgressLanguageOut.from_entity(view.language),
+            summary=ProgressSummaryOut.from_view(view.summary),
+            skills=[SkillProgressOut.from_entity(skill) for skill in view.skills],
+            frequent_errors=[FrequentErrorOut.from_entity(error) for error in view.frequent_errors],
+            history=[HistoryEntryOut.from_entity(entry) for entry in view.history],
         )
