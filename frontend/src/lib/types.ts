@@ -26,6 +26,24 @@ export interface VocabularyItem {
   note?: string;
 }
 
+/**
+ * One practice block of a tutor turn, ready to render (ADR-020).
+ *
+ * `unknown` is not a contract kind: it is what the screen shows when the API sends a kind this
+ * build does not know yet. A missing component must not cost the student the reply (ADR-020).
+ */
+export type PracticeBlock =
+  | { id: string; kind: "phrase"; text: string }
+  | { id: string; kind: "drill"; prompt: string }
+  | { id: string; kind: "unknown" };
+
+/** Verdict of one drill, as the API returns it (ADR-020). */
+export interface DrillResult {
+  correct: boolean;
+  expected: string | null;
+  explanation: string;
+}
+
 export interface Message {
   id: string;
   author: Author;
@@ -40,6 +58,8 @@ export interface Message {
   /** Feedback of the closing turn; `undefined` when there is none or it has not arrived. */
   corrections?: Correction[];
   vocabulary?: VocabularyItem[];
+  /** Practice blocks of a tutor turn; `undefined` when the turn has none (ADR-020). */
+  blocks?: PracticeBlock[];
 }
 
 /**

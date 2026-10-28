@@ -14,9 +14,19 @@ from dataclasses import dataclass
 
 @dataclass(frozen=True, slots=True)
 class ExerciseSeed:
+    """One exercise of the example catalog.
+
+    `kind` is `writing` (the student produces the phrase) or `choice` (the student picks one of
+    `options`). A choice exercise must have exactly one accepted answer and that answer must be one
+    of its options: the deterministic grading compares the chosen text with the accepted ones, so a
+    correct option missing from `answers` could never be right (ADR-021).
+    """
+
     prompt: str
     answers: tuple[str, ...]
     explanation: str
+    kind: str = "writing"
+    options: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -90,6 +100,24 @@ ENGLISH: tuple[UnitSeed, ...] = (
                         explanation=(
                             "«To "
                             "take away» (Reino Unido) y «to go» (Estados Unidos) dicen lo mismo."
+                        ),
+                    ),
+                    ExerciseSeed(
+                        prompt=(
+                            "Estás en un café y querés pedir. ¿Cuál es la forma más natural y "
+                            "cortés?"
+                        ),
+                        answers=("I'd like a coffee, please.",),
+                        explanation=(
+                            "«I'd like…» es la fórmula cortés; «I want» es correcto pero suena a "
+                            "exigencia."
+                        ),
+                        kind="choice",
+                        options=(
+                            "I'd like a coffee, please.",
+                            "I want coffee.",
+                            "Give me a coffee.",
+                            "Coffee!",
                         ),
                     ),
                 ),
@@ -246,6 +274,20 @@ FRENCH: tuple[UnitSeed, ...] = (
                             "«Enchanté» concuerda con quien habla: «enchantée» si es una mujer."
                         ),
                     ),
+                    ExerciseSeed(
+                        prompt="Le hablás a un desconocido mayor. ¿Cómo le preguntás cómo está?",
+                        answers=("Comment allez-vous ?",),
+                        explanation=(
+                            "Con «vous» el verbo es «allez»; «Comment vas-tu ?» es de «tu»."
+                        ),
+                        kind="choice",
+                        options=(
+                            "Comment allez-vous ?",
+                            "Comment vas-tu ?",
+                            "Ça va ?",
+                            "Salut, ça va ?",
+                        ),
+                    ),
                 ),
             ),
             LessonSeed(
@@ -392,6 +434,21 @@ GERMAN: tuple[UnitSeed, ...] = (
                         prompt="Traducí: «Vengo de la estación.»",
                         answers=("Ich komme vom Bahnhof", "Ich komme von dem Bahnhof"),
                         explanation="«von dem» se contrae en «vom».",
+                    ),
+                    ExerciseSeed(
+                        prompt="Querés decir «Voy al médico». ¿Cuál es la forma correcta?",
+                        answers=("Ich gehe zum Arzt.",),
+                        explanation=(
+                            "«zu» rige dativo: «zu dem» se contrae en «zum». «nach» se usa con "
+                            "lugares, no con personas."
+                        ),
+                        kind="choice",
+                        options=(
+                            "Ich gehe zum Arzt.",
+                            "Ich gehe zu der Arzt.",
+                            "Ich gehe nach dem Arzt.",
+                            "Ich gehe beim Arzt.",
+                        ),
                     ),
                 ),
             ),

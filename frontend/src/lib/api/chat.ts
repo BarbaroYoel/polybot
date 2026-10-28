@@ -8,7 +8,7 @@
  */
 
 import { API_BASE_URL, ApiError, apiFetch, requestBody } from "./client";
-import type { Correction, Message, TurnTokenEvent, VocabularyItem } from "./types";
+import type { Correction, Message, TurnBlock, TurnTokenEvent, VocabularyItem } from "./types";
 
 /**
  * Codes this module produces itself, mirroring the ones `client.ts` keeps private. They are not
@@ -69,6 +69,8 @@ export interface TurnStreamHandlers {
   onToken?: (event: TurnTokenEvent) => void;
   /** The authoritative tutor message, already persisted as `sent` (contract §3). */
   onMessageEnd?: (message: Message) => void;
+  /** Practice blocks of the tutor message, stored before this event leaves (ADR-020). */
+  onBlocks?: (messageId: string, items: TurnBlock[]) => void;
   onCorrections?: (messageId: string, items: Correction[]) => void;
   onVocabulary?: (messageId: string, items: VocabularyItem[]) => void;
 }
@@ -219,6 +221,16 @@ function handleEvent(event: SseEvent, handlers: TurnStreamHandlers): void {
       const message = parsePayload<Message>(event.data);
       if (!message || typeof message.id !== "string") throw unexpectedStream();
       handlers.onMessageEnd?.(message);
+      return;
+    }
+    case "blocks": {
+      const payload = parsePayload<{ message_id?: unknown; items?: unknown }>(event.data);
+      if (typeof payload?.message_id !== "string" || !Array.isArray(payload.items)) {
+        throw unexpectedStream();
+      }
+      // The shape of each block is the renderer's problem: an unknown kind is drawn as a notice,
+      // never as a broken thread (ADR-020).
+      handlers.onBlocks?.(payload.message_id, payload.items as TurnBlock[]);
       return;
     }
     case "correction": {

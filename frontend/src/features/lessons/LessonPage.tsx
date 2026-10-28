@@ -196,8 +196,8 @@ export function LessonPage() {
       </header>
 
       <Notice>
-        Escribe tus respuestas en {active.name}. La corrección no distingue mayúsculas ni
-        puntuación, pero sí acentos.
+        Respondé en {active.name}. La corrección no distingue mayúsculas ni puntuación, pero sí
+        acentos.
       </Notice>
 
       {result ? (
@@ -318,30 +318,56 @@ export function LessonPage() {
           <ol className="practice__list">
             {exercises.map((exercise, index) => {
               const inputId = `answer-${exercise.id}`;
+              const prompt = (
+                <>
+                  <span className="practice__number">Ejercicio {index + 1}</span>
+                  <span className="practice__question">{exercise.prompt}</span>
+                </>
+              );
+              const answer = (value: string) =>
+                setAnswers((current) => ({ ...current, [exercise.id]: value }));
+
               return (
                 <li className="practice__item" key={exercise.id}>
-                  <label className="practice__prompt" htmlFor={inputId}>
-                    <span className="practice__number">Ejercicio {index + 1}</span>
-                    <span className="practice__question">{exercise.prompt}</span>
-                  </label>
-                  <input
-                    id={inputId}
-                    className="practice__input"
-                    type="text"
-                    value={answers[exercise.id] ?? ""}
-                    onChange={(event) =>
-                      setAnswers((current) => ({
-                        ...current,
-                        [exercise.id]: event.target.value,
-                      }))
-                    }
-                    maxLength={400}
-                    autoComplete="off"
-                    autoCapitalize="off"
-                    autoCorrect="off"
-                    spellCheck={false}
-                    disabled={submitting}
-                  />
+                  {exercise.kind === "choice" ? (
+                    // ADR-021: a radio group answers with the option's text, and the server grades
+                    // it with the same comparison as a written answer. The right one is not marked.
+                    <fieldset className="practice__choice">
+                      <legend className="practice__prompt">{prompt}</legend>
+                      {exercise.options.map((option) => (
+                        <label className="practice__option" key={option}>
+                          <input
+                            type="radio"
+                            name={inputId}
+                            value={option}
+                            checked={answers[exercise.id] === option}
+                            onChange={() => answer(option)}
+                            disabled={submitting}
+                          />
+                          <span className="practice__option-text">{option}</span>
+                        </label>
+                      ))}
+                    </fieldset>
+                  ) : (
+                    <>
+                      <label className="practice__prompt" htmlFor={inputId}>
+                        {prompt}
+                      </label>
+                      <input
+                        id={inputId}
+                        className="practice__input"
+                        type="text"
+                        value={answers[exercise.id] ?? ""}
+                        onChange={(event) => answer(event.target.value)}
+                        maxLength={400}
+                        autoComplete="off"
+                        autoCapitalize="off"
+                        autoCorrect="off"
+                        spellCheck={false}
+                        disabled={submitting}
+                      />
+                    </>
+                  )}
                 </li>
               );
             })}

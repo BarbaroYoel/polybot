@@ -10,9 +10,12 @@ from app.core.handlers import error_response
 from app.domain.errors import (
     ActiveLanguageCannotBeArchived,
     AudioTooLong,
+    BlockNotAnswerable,
+    BlockNotFound,
     ConversationNotFound,
     DomainError,
     InvalidAudio,
+    InvalidTimezone,
     InvalidTurnMessage,
     LanguageAlreadyExists,
     LanguageNotFound,
@@ -51,6 +54,16 @@ _DOMAIN_ERRORS: dict[type[DomainError], tuple[int, str, str]] = {
         "invalid_turn_message",
         "Solo se puede transmitir un mensaje del usuario.",
     ),
+    BlockNotFound: (
+        404,
+        "block_not_found",
+        "Ese ejercicio no está en este mensaje. Actualiza la página y vuelve a intentar.",
+    ),
+    BlockNotAnswerable: (
+        400,
+        "block_not_answerable",
+        "Ese bloque es una frase para escuchar, no un ejercicio para responder.",
+    ),
     LlmUnavailable: (
         502,
         "llm_unavailable",
@@ -80,6 +93,12 @@ _DOMAIN_ERRORS: dict[type[DomainError], tuple[int, str, str]] = {
         409,
         "plan_already_exists",
         "Ya tenés un plan para ese idioma. Ajustá el actual en vez de crear otro.",
+    ),
+    InvalidTimezone: (
+        400,
+        "invalid_timezone",
+        "Esa zona horaria no es válida. Usá un identificador IANA, "
+        "por ejemplo «America/Argentina/Buenos_Aires».",
     ),
     LanguageAlreadyExists: (
         409,

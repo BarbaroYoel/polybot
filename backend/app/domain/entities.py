@@ -5,6 +5,8 @@ from dataclasses import dataclass
 from datetime import datetime
 from enum import StrEnum
 
+from app.domain.blocks import TurnBlock
+
 
 class CefrLevel(StrEnum):
     """Language level shown as a badge, never as a selector (ADR-008)."""
@@ -82,6 +84,8 @@ class Message:
     translation: str | None
     status: MessageStatus
     created_at: datetime
+    # Practice blocks of a tutor turn (ADR-020). Always empty for a user message.
+    blocks: Sequence[TurnBlock] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -154,12 +158,26 @@ class Lesson:
     position: int
 
 
+class ExerciseKind(StrEnum):
+    """How the student answers an exercise (ADR-021).
+
+    `writing` is producing the phrase; `choice` picks one of the options offered. Both are graded by
+    the same deterministic comparison, so the type only changes the control the UI draws.
+    """
+
+    WRITING = "writing"
+    CHOICE = "choice"
+
+
 @dataclass(frozen=True, slots=True)
 class LessonExercise:
-    """One activity: write the phrase in the practised language (F5 S8).
+    """One activity: write the phrase or pick the right option, in the practised language.
 
     `accepted_answers` is ordered: the first one is what the API shows as the expected answer
     when the student misses, and all of them are accepted by the deterministic comparison.
+
+    `options` only carries values for `choice`, and always includes the accepted answer; a `writing`
+    exercise has none. The accepted answers never reach the client (F5 S8).
     """
 
     id: str
@@ -168,6 +186,8 @@ class LessonExercise:
     prompt: str
     accepted_answers: Sequence[str]
     explanation: str
+    kind: ExerciseKind = ExerciseKind.WRITING
+    options: Sequence[str] = ()
 
     @property
     def expected(self) -> str:
@@ -270,3 +290,90 @@ class NewPlanSession:
     lesson_id: str
     week: int
     position: int
+
+
+class SkillId(StrEnum):
+    """The five skills of `desing.md` §6.5, in the order the screen shows them (F6 S2).
+
+    Only the first three have a persisted signal in v0; reading and listening are declared
+    unavailable instead of being faked with a zero (ADR-018).
+    """
+
+    CONVERSATION = "conversation"
+    WRITING = "writing"
+    VOCABULARY = "vocabulary"
+    READING = "reading"
+    LISTENING = "listening"
+
+
+@dataclass(frozen=True, slots=True)
+class ActivityCount:
+    """Activity recorded for one signal: how many, and when the newest one happened (F6 S1, S2).
+
+    `count` can be 0 while the signal is available: zero practices is a real measurement, while an
+    unavailable skill never reaches this object (its `count` stays `None` in the contract).
+    """
+
+    count: int
+    last_at: datetime | None
+
+
+@dataclass(frozen=True, slots=True)
+class SkillProgress:
+    """One skill as Progreso shows it (F6 S2).
+
+    `available` is false for a signal the product does not persist yet; then `count` and `last_at`
+    are `None`, never 0, so the UI can say «sin datos todavía» without inventing a measurement.
+    """
+
+    id: SkillId
+    available: bool
+    count: int | None
+    last_at: datetime | None
+
+
+class FrequentErrorKind(StrEnum):
+    """Where a frequent error came from: a tutor correction or a lesson attempt (F6 S3)."""
+
+    CORRECTION = "correction"
+    LESSON = "lesson"
+
+
+@dataclass(frozen=True, slots=True)
+class FrequentError:
+    """One repeated mistake, grouped by its exact pair and counted, never generated (F6 S3).
+
+    `prompt` is the exercise prompt for a lesson error and `None` for a tutor correction; `expected`
+    is the corrected text or the exercise's first accepted answer.
+    """
+
+    kind: FrequentErrorKind
+    prompt: str | None
+    original: str
+    expected: str
+    count: int
+    last_at: datetime
+
+
+class HistoryKind(StrEnum):
+    """What a history row links to: a lesson attempt or a conversation (F6 S4)."""
+
+    LESSON = "lesson"
+    CONVERSATION = "conversation"
+
+
+@dataclass(frozen=True, slots=True)
+class HistoryEntry:
+    """One row of «historial de prácticas y lecciones», newest first (F6 S4).
+
+    A lesson row carries `correct`/`total` and no message count; a conversation row carries its
+    `message_count` and no score, because the two activities do not share a scale.
+    """
+
+    kind: HistoryKind
+    id: str
+    title: str
+    at: datetime
+    correct: int | None
+    total: int | None
+    message_count: int | None

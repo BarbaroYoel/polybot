@@ -125,8 +125,15 @@ def test_the_detail_keeps_the_accepted_answers_out_of_the_response(
     assert detail["unit_kind"] == "vocabulary"
     assert detail["title"] == "Pedir algo en un café"
     assert detail["intro"]
-    assert len(detail["exercises"]) == 3
-    assert set(detail["exercises"][0]) == {"id", "position", "prompt"}
+    assert len(detail["exercises"]) == 4
+    assert set(detail["exercises"][0]) == {"id", "position", "prompt", "kind", "options"}
+    # ADR-021: a written exercise carries no options; the choice one offers them, without answers.
+    assert detail["exercises"][0]["kind"] == "writing"
+    assert detail["exercises"][0]["options"] == []
+    choice = detail["exercises"][-1]
+    assert choice["kind"] == "choice"
+    assert len(choice["options"]) == 4
+    assert "accepted_answers" not in choice
 
 
 def test_the_detail_of_another_language_is_a_not_found(api_client: TestClient) -> None:
@@ -156,11 +163,12 @@ def test_a_perfect_attempt_completes_the_lesson_and_recommends_the_next_one(
         detail["exercises"][0]["id"]: "I'd like a coffee, please",
         detail["exercises"][1]["id"]: "Could you bring me the bill, please?",
         detail["exercises"][2]["id"]: "to take away please",
+        detail["exercises"][3]["id"]: "I'd like a coffee, please.",
     }
 
     result = _submit(api_client, lesson["id"], answers)
 
-    assert (result["correct"], result["total"]) == (3, 3)
+    assert (result["correct"], result["total"]) == (4, 4)
     assert result["completed"] is True
     assert result["mistakes"] == []
     assert [term["term"] for term in result["vocabulary"]] == ["I'd like", "the bill"]
@@ -169,7 +177,7 @@ def test_a_perfect_attempt_completes_the_lesson_and_recommends_the_next_one(
     assert len(fake_llm.lesson_reviews) == 1
     review = fake_llm.lesson_reviews[0]
     assert review.lesson_title == "Pedir algo en un café"
-    assert (review.correct, review.total) == (3, 3)
+    assert (review.correct, review.total) == (4, 4)
 
     catalog = _catalog(api_client, LANGUAGE_INGLES)
     assert catalog["units"][0]["lessons"][0]["status"] == "completed"
@@ -219,10 +227,11 @@ def test_grading_ignores_case_and_punctuation_but_not_accents(api_client: TestCl
             detail["exercises"][0]["id"]: "bonjour comment allez-vous",
             detail["exercises"][1]["id"]: "je m appelle ana",
             detail["exercises"][2]["id"]: "enchantée",
+            detail["exercises"][3]["id"]: "Comment allez-vous ?",
         },
     )
 
-    assert apostrophe_free["correct"] == 3, "case and punctuation are typing, not knowledge"
+    assert apostrophe_free["correct"] == 4, "case and punctuation are typing, not knowledge"
 
     accents = _submit(
         api_client,
@@ -231,10 +240,11 @@ def test_grading_ignores_case_and_punctuation_but_not_accents(api_client: TestCl
             detail["exercises"][0]["id"]: "Bonjour, comment allez-vous ?",
             detail["exercises"][1]["id"]: "Je m'appelle Ana",
             detail["exercises"][2]["id"]: "enchante",
+            detail["exercises"][3]["id"]: "Comment allez-vous ?",
         },
     )
 
-    assert accents["correct"] == 2, "an accent changes the word: «enchanté» is not «enchante»"
+    assert accents["correct"] == 3, "an accent changes the word: «enchanté» is not «enchante»"
     assert accents["mistakes"][0]["expected"] == "Enchanté"
 
 
@@ -322,6 +332,7 @@ def test_a_missing_pi_executable_still_grades_the_lesson(
         detail["exercises"][0]["id"]: "I'd like a coffee, please",
         detail["exercises"][1]["id"]: "Could you bring me the bill, please?",
         detail["exercises"][2]["id"]: "to take away please",
+        detail["exercises"][3]["id"]: "I'd like a coffee, please.",
     }
 
     response = client_without_pi.post(
@@ -331,7 +342,7 @@ def test_a_missing_pi_executable_still_grades_the_lesson(
 
     assert response.status_code == 200, response.text
     result = response.json()
-    assert (result["correct"], result["total"]) == (3, 3)
+    assert (result["correct"], result["total"]) == (4, 4)
     assert result["completed"] is True
     assert result["feedback"] is None, "no tutor, no comment: the grade is still a grade"
     assert result["next_lesson"]["title"] == "Pagar y dejar propina"
@@ -354,3 +365,27 @@ def test_submitting_an_unknown_lesson_is_a_not_found(api_client: TestClient) -> 
 
     assert response.status_code == 404
     assert response.json()["error"]["code"] == "lesson_not_found"
+
+
+def test_a_choice_is_graded_by_the_option_the_student_picks(api_client: TestClient) -> None:
+    """ADR-021: the type only changes the control; the grading is the deterministic one."""
+    lesson = _lesson_with(api_client, LANGUAGE_FRANCES, "Saludar y presentarse")
+    detail = _detail(api_client, lesson["id"])
+    choice = detail["exercises"][-1]
+    assert choice["kind"] == "choice"
+    correct_option, *wrong_options = choice["options"]
+    written = {
+        exercise["id"]: "zzz" for exercise in detail["exercises"] if exercise["kind"] == "writing"
+    }
+
+    missed = _submit(api_client, lesson["id"], {**written, choice["id"]: wrong_options[0]})
+
+    mistake = next(item for item in missed["mistakes"] if item["exercise_id"] == choice["id"])
+    assert mistake["expected"] == correct_option, "the right option is revealed after a miss"
+
+    picked = _submit(api_client, lesson["id"], {**written, choice["id"]: correct_option})
+    assert choice["id"] not in {item["exercise_id"] for item in picked["mistakes"]}
+
+    # Typing rules still apply to the picked text: case and punctuation do not decide the answer.
+    typed = _submit(api_client, lesson["id"], {**written, choice["id"]: correct_option.lower()})
+    assert choice["id"] not in {item["exercise_id"] for item in typed["mistakes"]}

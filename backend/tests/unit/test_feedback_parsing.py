@@ -209,12 +209,15 @@ def test_the_closing_prompt_is_versioned_and_asks_for_strict_json() -> None:
     prompt = FeedbackPrompt.load()
     system = prompt.render_system(make_turn().context)
 
-    assert PROMPT_VERSION_FEEDBACK == "feedback.v1"
-    assert "feedback.v1" in prompt.system
+    assert PROMPT_VERSION_FEEDBACK == "feedback.v2"
+    assert "feedback.v2" in prompt.system
     assert "JSON" in system
     # The prompt must forbid invented errors: the cards are educational, not decorative.
     assert "No inventes errores" in system or "no inventes errores" in system
     assert "Francés" in system and "A1" in system and "es" in system
+    # ADR-020: the closing call may also propose at most two blocks, one drill.
+    assert '"blocks"' in system
+    assert "Máximo **2 bloques**" in system
 
 
 def test_the_closing_prompt_carries_the_message_the_reply_and_the_history() -> None:

@@ -4,9 +4,13 @@ from collections.abc import Sequence
 from datetime import datetime
 from typing import Protocol
 
+from app.domain.blocks import TurnBlock
 from app.domain.entities import (
+    ActivityCount,
     CefrLevel,
     Conversation,
+    FrequentError,
+    HistoryEntry,
     LanguageProfile,
     Lesson,
     LessonAnswer,
@@ -98,6 +102,9 @@ class MessageRepository(Protocol):
     async def set_translation(self, message_id: str, translation: str) -> Message:
         """Store the translation of one message; asking twice never calls the provider twice."""
 
+    async def save_blocks(self, message_id: str, blocks: Sequence[TurnBlock]) -> Message:
+        """Attach the practice blocks to one message, replacing the previous ones (ADR-020)."""
+
     async def list_messages_before(
         self, conversation_id: str, before: Message, *, limit: int
     ) -> list[Message]:
@@ -182,3 +189,37 @@ class StudyPlanRepository(Protocol):
 
     async def list_sessions(self, plan_id: str) -> list[PlanSession]:
         """The sessions of one plan, in schedule order: week, then position."""
+
+
+class ProgressRepository(Protocol):
+    """Read-only aggregates over the signals F6 already stores (ADR-018: no new schema).
+
+    Every method filters by `language_id`: progress never mixes languages (AGENTS.md §3). Dates are
+    naive UTC, the codebase convention (`app/core/dates.py`), and `since` is already the UTC instant
+    of the caller's local Monday 00:00.
+    """
+
+    async def conversation_activity(self, language_id: str) -> ActivityCount:
+        """Conversations with at least one message, and the newest message of the language.
+
+        An empty conversation is not a practice and does not count (F6 S1).
+        """
+
+    async def weekly_conversation_count(self, language_id: str, *, since: datetime) -> int:
+        """Distinct conversations with at least one message at or after `since` (F6 S1)."""
+
+    async def writing_activity(self, language_id: str) -> ActivityCount:
+        """Exercise answers sent in attempts of this language, and the newest attempt (F6 S2)."""
+
+    async def vocabulary_activity(self, language_id: str) -> ActivityCount:
+        """Suggested terms stored for this language, and the newest one (F6 S2)."""
+
+    async def frequent_errors(self, language_id: str, *, limit: int) -> list[FrequentError]:
+        """Mistakes grouped by their exact pair, already ordered and capped at `limit` (F6 S3).
+
+        Corrections and lesson answers are merged by the adapter: both kinds compete for the same
+        top positions, ordered by count and then by their newest occurrence.
+        """
+
+    async def history(self, language_id: str, *, limit: int) -> list[HistoryEntry]:
+        """Lesson attempts and non-empty conversations, mixed, newest first (F6 S4)."""

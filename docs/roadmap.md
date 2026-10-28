@@ -1,8 +1,7 @@
 # Roadmap — Polybot
 
-Cada fase termina con algo verificable por un humano. Estado actual: **F5 (lecciones y planes)
-completada** en su rama (`8ba8964`, `00d8dcb`), entregada como cadena de PRs sobre esa rama. F6 y F7
-pendientes.
+Cada fase termina con algo verificable por un humano. Estado actual: **F6.6 (lecciones con
+ejercicios de elección) completada** en el árbol de trabajo. F1–F6.6 completas; F7 pendiente.
 
 ## F0 — Base documental
 
@@ -123,12 +122,94 @@ suite de tests porque el stack de testing sigue sin decidirse (`docs/stack.md`);
 suma 2.466 líneas y no se puede partir sin romper el build, así que se entrega como cadena de PRs
 sobre la rama.
 
-## F6 — Progreso
+## F6 — Progreso — **completada** (rama `feat/f6-progress`)
 
-- Resumen, evolución por destreza, errores frecuentes, historial.
-- Nivel como dato trazable, no como medición infalible.
+Alcance, contrato y límites: `odd/tasks/f6-progress.md`. Decisión registrada: ADR-018.
 
-**Verificación:** el progreso refleja las sesiones reales de F3–F5.
+- [x] `GET /progress?language_id=&tz=` con resumen, destrezas, errores frecuentes e historial, todo
+      derivado de conversaciones, intentos, correcciones y vocabulario guardados en F3–F5.
+- [x] Nivel como dato del perfil, de solo lectura; se cambia solo en `/languages` con acción explícita.
+- [x] Sin esquema nuevo ni migración: la vista es de solo lectura.
+- [x] PWA: resumen, cinco destrezas (tres con señal real; lectura y escucha como «sin datos»), errores
+      frecuentes e historial con enlaces reales.
+- [x] Contrato en `docs/api-contract.md` §3 «El progreso» y ADR-018.
+- [x] `uv run pytest`, `ruff check`, `ruff format --check`, `npm run typecheck` y `npm run build`
+      ejecutados y verdes.
+
+**Verificación ejecutada:**
+
+- `uv run pytest` → **221 passed in 34.28s** (incluye los 12 escenarios de `/progress`, los 5 de
+  `week_start` y las 203 pruebas previas).
+- `uv run ruff format --check` y `uv run ruff check` → limpios (3 archivos nuevos formateados antes).
+- `npm run typecheck` → exit 0; `npm run build` → ✓ built in 2.68s.
+- Sonda HTTP contra una base **aislada**, migrada con Alembic y sembrada, en el puerto 8010:
+  francés `1/4` lecciones, 1 conversación, `writing: 3`, 3 errores frecuentes y 3 filas de historial;
+  una conversación alemana nueva cuenta como 1 en la meta semanal y **no** contamina la meta francesa;
+  `tz=No/Existe` → 400 `invalid_timezone`; idioma inexistente → 404 `language_not_found`.
+- Sonda de navegador con Chromium headless (Playwright) sobre la PWA real en 1280×900 y 375×812:
+  la pantalla muestra resumen, cinco destrezas, errores e historial; no hubo errores de consola ni
+  desborde horizontal; las llamadas salieron por `http://127.0.0.1:5173/api/v1/...`, es decir por el
+  proxy de Vite, no contra `localhost:8000` del navegador.
+- URL pública de Codespaces (`https://<codespace>-5173.app.github.dev`) verificada de punta a punta:
+  la app devolvió 200 y `/api/v1/health` y `/api/v1/progress` respondieron a través del proxy. Se
+  probó con visibilidad temporal `public` y se volvió a `private`.
+
+**Entorno Codespaces.** Para que la URL pública funcione hicieron falta dos ajustes locales:
+`allowedHosts: [".app.github.dev"]` en `server` y `preview` de `frontend/vite.config.ts`, y
+`VITE_API_BASE_URL=/api/v1` en `frontend/.env.local` (ignorado por git). El puerto 5173 se registró
+con `gh codespace ports forward 5173:15173`.
+
+**Límites conocidos:** no hay minutos ni «tiempo practicado» porque no se registra duración
+(ADR-018); lectura y escucha no tienen señal y no se muestran como cero; el frontend sigue sin suite
+propia porque el stack de testing no está decidido (`docs/stack.md`); `npm audit` reporta 4
+vulnerabilidades (3 moderadas, 1 alta) en dependencias de desarrollo, sin `npm audit fix` para no
+cambiar versiones fuera de esta fase.
+
+## F6.5 — UI inteligente en el chat — **completada**
+
+Alcance, contrato y evidencia: `odd/tasks/chat-ui-blocks.md`. Decisión registrada: ADR-020.
+
+- [x] Bloques de práctica tipados en el turno del tutor (`phrase`, `drill`), validados en el
+      dominio con límites duros: 2 por turno, uno interactivo, árbol chato.
+- [x] El cierre de turno (`feedback.v2`) propone contenido; la API valida y la PWA dibuja. El modelo
+      no elige componentes ni layout, y no hay acoplamiento al harness (ADR-004).
+- [x] Evento SSE `blocks` después de `message_end` y antes de `correction`/`vocabulary`; bloques
+      persistidos con el mensaje y devueltos por el detalle.
+- [x] `POST .../blocks/{block_id}/answers` con corrección determinista y sin persistir intentos; las
+      respuestas aceptadas no viajan al cliente antes de responder.
+- [x] PWA: tarjeta de frase con audio (F4) y ejercicio interactivo con «Comprobar», fallback visible
+      ante un `kind` desconocido.
+
+**Verificación:** `uv run pytest` (267 passed), `ruff format --check` y `ruff check` limpios,
+`npm run typecheck` y `npm run build` verdes; un turno real contra el adaptador de OpenCode devolvió
+`blocks` con `phrase` + `drill`, el ejercicio se corrigió bien y mal por HTTP, y los bloques
+sobrevivieron a la reedición del detalle. Detalle en el documento de la fase.
+
+**Límites conocidos:** el resultado del drill no se guarda (no suma señal a `/progress`, ADR-018); el
+frontend sigue sin suite propia porque el stack de testing no está decidido (`docs/stack.md`); la
+frase no trae traducción propia y `desing.md` §6.1.2 todavía no menciona los bloques (propuesta de
+texto pendiente de aprobación del humano).
+
+## F6.6 — Lecciones con ejercicios de elección — **completada**
+
+Alcance y evidencia: `odd/tasks/lesson-choice-exercises.md`. Decisión registrada: ADR-021.
+
+- [x] `LessonExercise.kind` (`writing` | `choice`) y `options`, aditivos y con default `writing`.
+- [x] Corrección única: la opción elegida se compara con el mismo `domain/grading.py` de un
+      ejercicio escrito; las respuestas aceptadas y la opción correcta no viajan al cliente.
+- [x] Catálogo sembrado con un `choice` por idioma (inglés, francés y alemán).
+- [x] PWA: grupo de radios de ancho completo, contador de respondidos y resultado igual al de un
+      ejercicio escrito.
+- [x] Contrato, ADR y este roadmap actualizados.
+
+**Verificación:** `uv run pytest` (273 passed), `ruff format --check` y `ruff check` limpios,
+`npm run typecheck` y `npm run build` verdes; sonda HTTP sobre una base limpia migrada y sembrada:
+el detalle devolvió `kind`/`options`, elegir la opción equivocada dio 3/4 con la esperada revelada, y
+la correcta 4/4 completada.
+
+**Límites conocidos:** el seed no refresca un catálogo ya sembrado, así que una base anterior no ve
+los ejercicios nuevos sin recrearla; `order` y `listen` siguen siendo decisiones aparte; el frontend
+continúa sin suite propia (`docs/stack.md`).
 
 ## F7 — Intérprete en tiempo real
 

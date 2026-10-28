@@ -6,7 +6,6 @@ import { ErrorState, LoadingState } from "../components/States";
 import { LanguageProvider } from "../lib/language";
 import {
   NotFoundPage,
-  ProgressPage,
   SettingsPage,
   TranslatePage,
 } from "../features/sections/pages";
@@ -15,6 +14,7 @@ import { LanguagesPage } from "../features/languages/LanguagesPage";
 import { LessonPage } from "../features/lessons/LessonPage";
 import { LessonsPage } from "../features/lessons/LessonsPage";
 import { PlansPage } from "../features/plans/PlansPage";
+import { ProgressPage } from "../features/progress/ProgressPage";
 
 const ChatPage = lazy(async () => {
   const module = await import("../features/chat/ChatPage");

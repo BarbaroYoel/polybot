@@ -1,5 +1,6 @@
-"""SQLAlchemy adapter for the lesson catalog and its attempts (F5 S1, S2, S6)."""
+"""SQLAlchemy adapter for the lesson catalog and its attempts (F5 S1, S2, S6, ADR-021)."""
 
+import json
 from collections.abc import Sequence
 from uuid import uuid4
 
@@ -18,6 +19,7 @@ from app.adapters.db.models import (
 from app.core.dates import utc_now
 from app.domain.entities import (
     CefrLevel,
+    ExerciseKind,
     Lesson,
     LessonAnswer,
     LessonAttempt,
@@ -27,6 +29,19 @@ from app.domain.entities import (
     LessonUnit,
     LessonUnitKind,
 )
+
+
+def _stored_options(raw: str | None) -> tuple[str, ...]:
+    """Options of a choice exercise, tolerant to a row this version cannot read (ADR-021)."""
+    if not raw:
+        return ()
+    try:
+        value = json.loads(raw)
+    except json.JSONDecodeError:
+        return ()
+    if not isinstance(value, list):
+        return ()
+    return tuple(item.strip() for item in value if isinstance(item, str) and item.strip())
 
 
 def _to_unit(row: LessonUnitRow) -> LessonUnit:
@@ -112,6 +127,8 @@ class SqlAlchemyLessonRepository:
                 prompt=exercise.prompt,
                 accepted_answers=answers.get(exercise.id, []),
                 explanation=exercise.explanation,
+                kind=ExerciseKind(exercise.kind),
+                options=_stored_options(exercise.options_json),
             )
             for exercise in exercises
         ]

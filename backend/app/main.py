@@ -10,6 +10,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.adapters.db.session import create_engine, create_session_factory
+from app.adapters.llm.opencode import OpenCodeCliAdapter
 from app.adapters.llm.pi import PiCliAdapter
 from app.adapters.stt.whistle import WhistleSttAdapter
 from app.adapters.tts.piper import PiperTtsAdapter
@@ -41,12 +42,21 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.state.settings = settings
     app.state.engine = create_engine(settings.database_url)
     app.state.session_factory = create_session_factory(app.state.engine)
-    # The tutor is a Pi instance per turn (F3 S1, ADR-013); `api/` only sees the port.
-    app.state.llm = PiCliAdapter(
-        command=[settings.pi_bin_path],
-        model=settings.pi_model_or_none,
-        timeout_seconds=settings.pi_timeout_seconds,
-    )
+    # The tutor is a provider subprocess per turn behind the LLM port (ADR-013, ADR-019); `api/`
+    # only sees the port. Pi is the default; OpenCode is selected with `LLM_PROVIDER`.
+    if settings.llm_provider == "opencode":
+        app.state.llm = OpenCodeCliAdapter(
+            command=[settings.opencode_bin_path],
+            model=settings.opencode_model_or_none,
+            agent=settings.opencode_agent,
+            timeout_seconds=settings.opencode_timeout_seconds,
+        )
+    else:
+        app.state.llm = PiCliAdapter(
+            command=[settings.pi_bin_path],
+            model=settings.pi_model_or_none,
+            timeout_seconds=settings.pi_timeout_seconds,
+        )
     # Whistle transcribes on this machine's CPU (F4 S1, ADR-015). The engine is imported and its
     # model loaded on the first transcription, so building the app stays cheap.
     app.state.stt = WhistleSttAdapter()

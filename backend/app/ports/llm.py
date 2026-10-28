@@ -8,6 +8,7 @@ from collections.abc import AsyncIterator, Sequence
 from dataclasses import dataclass
 from typing import Protocol
 
+from app.domain.blocks import TurnBlock
 from app.domain.entities import CefrLevel, MessageAuthor
 
 
@@ -62,15 +63,26 @@ class VocabularyDraft:
 
 @dataclass(frozen=True, slots=True)
 class TurnFeedback:
-    """What the closing call of a turn produced (F3 S7)."""
+    """What the closing call of a turn produced (F3 S7, ADR-020).
+
+    Corrections and vocabulary belong to the user message; the blocks belong to the tutor message
+    and live with it. `is_empty` only speaks about the feedback rows: a turn with blocks and
+    nothing to correct still has something to show.
+    """
 
     corrections: Sequence[CorrectionDraft] = ()
     vocabulary: Sequence[VocabularyDraft] = ()
+    blocks: Sequence[TurnBlock] = ()
 
     @property
     def is_empty(self) -> bool:
-        """A turn with nothing to report: no rows to store and no events to emit."""
+        """No correction and no new term: no feedback row, no `correction`/`vocabulary` events."""
         return not (self.corrections or self.vocabulary)
+
+    @property
+    def has_blocks(self) -> bool:
+        """True when the closing call proposed at least one block that survived validation."""
+        return bool(self.blocks)
 
 
 EMPTY_FEEDBACK = TurnFeedback()

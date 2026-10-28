@@ -81,7 +81,7 @@ def test_seed_inserts_the_example_data_once(
         "conversations": 2,
         "messages": 7,
         "lessons": 12,
-        "exercises": 36,
+        "exercises": 39,
         "terms": 24,
     }
     assert second == {
