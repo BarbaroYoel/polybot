@@ -4,9 +4,10 @@ PWA de tutor de idiomas guiada por IA, centrada en el chat, con la voz como capa
 clase. Un solo idioma activo a la vez; conversaciones, lecciones, planes y progreso aislados por
 idioma.
 
-**Estado:** F1–F7 completas. F7 (intérprete en tiempo real) está en la rama
-`feat/f7-live-interpreter`, con `uv run pytest` (292 passed), Ruff, typecheck, build y una sonda de
-navegador con micrófono falso. La fuente de verdad del avance y de la evidencia de cada fase es
+**Estado:** F1–F7 completas, con arranque único para uso privado y verificación real de chat, voz,
+intérprete, lecciones, planes y progreso. La evidencia de estabilización está en
+[`odd/tasks/local-readiness.md`](./odd/tasks/local-readiness.md).
+La fuente de verdad del avance y de la evidencia de cada fase es
 [`docs/roadmap.md`](./docs/roadmap.md); el detalle tarea por tarea está en [`odd/tasks/`](./odd/tasks).
 
 Lo que ya funciona de punta a punta: la PWA lee idiomas y conversaciones de la API, conversa con el
@@ -21,13 +22,33 @@ voz en vivo por WebSocket con transcripción y traducción por segmentos.
 | Pieza | Para qué | Nota |
 |---|---|---|
 | Python 3.13 + [uv](https://docs.astral.sh/uv/) | backend | `uv sync` instala todo |
-| Node 20+ | frontend | solo el frontend |
+| Node 20.19+ o 22.12+ (recomendado: LTS vigente) | frontend | requisito de Vite 7; usar una rama soportada de Node |
 | [Pi](https://github.com/badlogic/pi) en el `PATH` | tutor por defecto (ADR-013) | sin Pi en el `PATH`, el chat y la traducción responden `llm_unavailable`, y la lección se corrige igual sin comentario; idiomas, catálogo y planes siguen funcionando |
 | [OpenCode](https://opencode.ai) CLI (`opencode`) | tutor alternativo (ADR-019) | activalo con `LLM_PROVIDER=opencode`; requiere un proveedor/modelo ya autenticado en OpenCode (`OPENCODE_MODEL`) |
 | Piper (binario) + voces | audio de salida (ADR-016) | opcional: sin él, `/voice/speech` responde `tts_unavailable` |
 | `cactus-needle` | audio de entrada, modelo Whistle (ADR-015) | entra por `uv sync`; el modelo se baja con el primer uso |
 
 ## Cómo correrlo
+
+### Arranque diario (uso privado)
+
+Después de preparar las dependencias, la base y los proveedores como se indica abajo:
+
+```bash
+./scripts/start-local.sh
+```
+
+Abre **http://localhost:5173**. `Ctrl+C` detiene frontend y backend. El script no instala paquetes,
+no migra ni siembra la base y no elimina datos. Si un puerto ya está ocupado, avisa sin cerrar
+procesos ajenos. Ambos servidores escuchan solo en `127.0.0.1`; la PWA usa el proxy `/api/v1`,
+incluido el WebSocket del intérprete.
+
+En **Codespaces**, abre el puerto **5173** desde la pestaña Puertos y conserva su visibilidad
+**privada**. No expongas el puerto 8000: la API de v0 no tiene autenticación. El enlace de Codespaces
+usa HTTPS, necesario para el micrófono fuera de `localhost`. La aplicación se detiene si se apaga
+el Codespace; no es un despliegue permanente.
+
+### Preparación inicial
 
 Backend (`http://localhost:8000`, la API vive en `/api/v1`):
 
@@ -64,6 +85,22 @@ agente (`general`) porque `plan` narra su rol en vez de traducir (F7 T6).
 
 El intérprete de voz vive en `WS /api/v1/voice/interpret`; el proxy de Vite ya reenvía WebSocket
 (`ws: true`) y el micrófono solo se pide al pulsar «Iniciar micrófono». El audio no se guarda.
+
+Para habilitar **Escuchar** y **Más lento**, instala el binario de Piper indicado en
+[`docs/env.example`](./docs/env.example) y configura `PIPER_BIN_PATH` con su ruta absoluta.
+Descarga también cada voz (`.onnx` y `.onnx.json`) desde
+[Piper Voices](https://huggingface.co/rhasspy/piper-voices/tree/main) a `data/piper-voices/`:
+
+| Idioma | Ruta en Piper Voices | Voz por defecto |
+|---|---|---|
+| Español | `es/es_MX/claude/high/` | `es_MX-claude-high` |
+| Inglés | `en/en_US/lessac/high/` | `en_US-lessac-high` |
+| Francés | `fr/fr_FR/siwis/medium/` | `fr_FR-siwis-medium` |
+| Alemán | `de/de_DE/thorsten/high/` | `de_DE-thorsten-high` |
+
+El motor de entrada Whistle se descarga en el primer uso. La voz se procesa en el equipo que ejecuta
+el backend, no necesariamente en el dispositivo donde abres el navegador. El chat y la traducción
+siguen necesitando acceso al proveedor de IA: **uso privado no significa funcionamiento sin Internet**.
 
 ## Checks
 

@@ -38,6 +38,7 @@ data/
 
 # Bases de datos locales
 *.db
+*.db.bak-*
 *.sqlite
 *.sqlite3
 

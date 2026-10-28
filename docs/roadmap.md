@@ -1,7 +1,9 @@
 # Roadmap — Polybot
 
-Cada fase termina con algo verificable por un humano. Estado actual: **F1–F7 completas**; F6.6 y F7
-están mergeadas o listas para mergear desde sus ramas. El detalle y la evidencia viven en
+Cada fase termina con algo verificable por un humano. Estado actual: **F1–F7 completas**.
+La estabilización para uso privado está documentada en
+[`odd/tasks/local-readiness.md`](../odd/tasks/local-readiness.md); conserva los datos existentes,
+añade arranque único y actualiza dependencias vulnerables. El detalle y la evidencia viven en
 `odd/tasks/`.
 
 ## F0 — Base documental
@@ -117,8 +119,9 @@ copia aislada y su propia base migrada y sembrada, confirmó los tres puntos ped
 3. El adaptador de Pi conserva flags de aislamiento, presupuesto de tiempo, directorio temporal y
    cancelación; las suites de chat, cierre de turno y traducción siguen en verde.
 
-**Límites conocidos:** dos planes del mismo idioma creados en carrera pueden responder 500 en vez
-de 409 (v0 de un solo usuario, anotado en `odd/tasks/f5-lessons-plans.md` L4); el frontend no tiene
+**Límites conocidos al cerrar F5:** dos planes del mismo idioma creados en carrera podían responder
+500 en vez de 409; corregido en la estabilización del 2026-10-28, con regresión automatizada y
+prueba concurrente real (`odd/tasks/local-readiness.md`). El frontend no tiene
 suite de tests porque el stack de testing sigue sin decidirse (`docs/stack.md`); el slice de la PWA
 suma 2.466 líneas y no se puede partir sin romper el build, así que se entrega como cadena de PRs
 sobre la rama.
@@ -231,6 +234,26 @@ con micrófono falso, sin errores de consola ni desborde.
 **Límites conocidos:** el proveedor tarda 3–7 s por traducción, así que los parciales suelen quedar
 viejos; el corte de 4,5 s puede degradar un segmento corto; el TTS de la traducción queda fuera; no
 hay suite de frontend; a 375 px el saludo del TopBar se parte en cuatro líneas (deuda de F1).
+
+## Estabilización para uso privado — 2026-10-28
+
+Alcance, evidencia y límites: [`odd/tasks/local-readiness.md`](../odd/tasks/local-readiness.md).
+Actualización mayor autorizada: ADR-023.
+
+- Arranque único de backend y frontend en loopback, sin instalaciones ni cambios de datos automáticos.
+- Uso de Codespaces con puerto 5173 privado, sin publicar la API.
+- Piper y cuatro voces instaladas; síntesis, reproducción, STT e intérprete real verificados.
+- Chat, correcciones, traducciones, lecciones, planes y progreso comprobados contra una copia aislada.
+- Vite y React Router actualizados, con cero vulnerabilidades en `npm audit` y `--omit=dev`.
+- Cabecera móvil ajustada para no comprimir el saludo en cuatro líneas.
+- Recuperación accionable tras denegar el micrófono, sin solicitarlo automáticamente.
+- Creación concurrente de planes devuelve 409 en vez de 500, sin ocultar otros errores de integridad.
+- Cierre del intérprete tolerante a clientes desconectados; 296 tests de backend, Ruff, typecheck,
+  build y sondas de navegador en verde.
+
+Los límites históricos de cada fase se mantienen como registro; los corregidos por esta
+estabilización se detallan en su ficha. No se añade autenticación ni despliegue público, ni se
+resuelven silenciosamente las decisiones pendientes de testing o funcionalidades futuras.
 
 ## Fuera de alcance
 

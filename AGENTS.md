@@ -80,6 +80,12 @@ Existen `backend/` (F2) y `frontend/` (F1). Estos son los únicos comandos váli
 
 La API vive en `http://localhost:8000/api/v1` y la PWA la consume desde ahí; `VITE_API_BASE_URL` (en `frontend/.env`) cambia ese destino. Para que la PWA muestre datos, el backend necesita la base migrada y sembrada (`uv run alembic upgrade head` y el seed).
 
+### Uso privado — raíz del repositorio
+
+`./scripts/start-local.sh` inicia ambos servidores ya preparados en `127.0.0.1`, con proxy
+`/api/v1`; `Ctrl+C` los detiene. No instala dependencias ni modifica la base de datos. En Codespaces,
+solo se reenvía el puerto 5173, con visibilidad privada; no se publica la API sin autenticación.
+
 No inventes comandos de build, test ni migración, y no ejecutes instaladores por iniciativa propia.
 
 ## 6. Cómo trabajar
