@@ -4,11 +4,13 @@ from collections.abc import Sequence
 from uuid import uuid4
 
 from sqlalchemy import delete, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.adapters.db.models import PlanSessionRow, StudyPlanRow
 from app.core.dates import utc_now
 from app.domain.entities import NewPlanSession, NewStudyPlan, PlanSession, StudyPlan
+from app.domain.errors import PlanAlreadyExists
 
 
 def _to_plan(row: StudyPlanRow) -> StudyPlan:
@@ -31,6 +33,16 @@ def _to_session(row: PlanSessionRow) -> PlanSession:
         week=row.week,
         position=row.position,
     )
+
+
+def _is_plan_language_conflict(error: IntegrityError) -> bool:
+    """True only for SQLite's one-plan-per-language unique violation.
+
+    This adapter owns the SQLite detail on purpose (ADR-012): a foreign-key failure or any other
+    integrity error must keep propagating instead of being reported as a domain conflict.
+    """
+    detail = str(getattr(error, "orig", error)).lower()
+    return "unique constraint failed" in detail and "study_plans.language_id" in detail
 
 
 class SqlAlchemyStudyPlanRepository:
@@ -61,7 +73,15 @@ class SqlAlchemyStudyPlanRepository:
         )
         self._session.add(row)
         # Without ORM relationships the plan must exist before its sessions reference it.
-        await self._session.flush()
+        try:
+            await self._session.flush()
+        except IntegrityError as error:
+            # Two requests can pass the service's pre-check at the same time; the unique
+            # constraint is the last referee. Translate only that conflict to the domain error
+            # the API already maps to 409; any other integrity failure keeps propagating.
+            if not _is_plan_language_conflict(error):
+                raise
+            raise PlanAlreadyExists(draft.language_id) from error
         await self._write_sessions(row.id, schedule)
         return _to_plan(row)
 

@@ -239,6 +239,10 @@ audio ni texto, y al cerrar se pierde el historial. El TTS queda fuera de esta f
 | GET | `/progress?language_id=&tz=` | Resumen del idioma activo, destrezas, errores frecuentes e historial, todo **derivado** de conversaciones, intentos y vocabulario guardados. Acepta `tz` (IANA, por defecto `UTC`) para calcular la semana de la meta semanal, que empieza el lunes; una `tz` inválida es 400 `invalid_timezone`. Un idioma inexistente es 404 `language_not_found`. Sin datos devuelve 200 con ceros y listas vacías. **F6, ADR-018.** |
 | POST | `/translate` | Traducción **sin estado**: `{ "text", "source?", "target" }` → `{ "translation", "detected_source" }`. Es el camino del fragmento seleccionado: no guarda nada. `source` es el código del idioma de origen; sin `source`, el proveedor lo detecta y `detected_source` vuelve `null` (el servidor no inventa un código que no detectó). `text` de 1 a 4000 caracteres, recortado. Target inválido o texto vacío → 422 `validation_error`. **ADR-014.** |
 
+La exclusividad de un plan por idioma también se aplica a peticiones simultáneas: una creación
+puede responder 201 y la otra 409 `plan_already_exists`, sin convertir el conflicto único de la
+base en un error 500. Otros errores de integridad no se clasifican como un plan duplicado.
+
 #### El ejercicio
 
 ```jsonc

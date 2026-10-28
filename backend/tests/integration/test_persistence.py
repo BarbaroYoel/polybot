@@ -14,6 +14,7 @@ from app.adapters.db.conversations import (
 )
 from app.adapters.db.languages import SqlAlchemyLanguageRepository
 from app.adapters.db.models import LanguageRow, MessageRow
+from app.adapters.db.plans import SqlAlchemyStudyPlanRepository
 from app.adapters.db.seed import (
     CONVERSATION_EN_ROUTINE,
     CONVERSATION_FR_CAFE,
@@ -28,7 +29,9 @@ from app.domain.entities import (
     ConversationMode,
     NewConversation,
     NewLanguage,
+    NewStudyPlan,
 )
+from app.domain.errors import PlanAlreadyExists
 
 
 async def _seed(session_factory: async_sessionmaker[AsyncSession]) -> dict[str, int]:
@@ -124,6 +127,63 @@ def test_a_duplicate_language_code_is_rejected_by_the_database(
             with pytest.raises(IntegrityError):
                 await repository.add_language(
                     NewLanguage(code="fr", name="Francés", level=CefrLevel.B1)
+                )
+            await session.rollback()
+
+    asyncio.run(scenario())
+
+
+def test_a_racing_second_plan_is_reported_as_already_existing(
+    session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    """The service pre-check can pass twice; the unique constraint is the last referee.
+
+    This reproduces the state after both requests saw no plan: the first one committed and the
+    second one reaches `add_plan` with the same language. The adapter must answer the domain
+    conflict the API already maps to 409, not leak an `IntegrityError`.
+    """
+
+    async def scenario() -> None:
+        await _seed(session_factory)
+        draft = NewStudyPlan(
+            language_id=LANGUAGE_FRANCES,
+            goal="Pasar de A1 a B1 en francés",
+            frequency=2,
+            daily_minutes=20,
+        )
+        async with session_factory() as first_session:
+            first = SqlAlchemyStudyPlanRepository(first_session)
+            assert await first.get_plan(LANGUAGE_FRANCES) is None
+            await first.add_plan(draft, [])
+            await first_session.commit()
+
+        async with session_factory() as second_session:
+            second = SqlAlchemyStudyPlanRepository(second_session)
+            # Its own pre-check happened before the first request committed.
+            with pytest.raises(PlanAlreadyExists):
+                await second.add_plan(draft, [])
+            await second_session.rollback()
+
+    asyncio.run(scenario())
+
+
+def test_a_plan_with_a_missing_language_still_raises_integrity_error(
+    session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    """Only the plan-language unique conflict is a domain conflict; FK failures must propagate."""
+
+    async def scenario() -> None:
+        async with session_factory() as session:
+            repository = SqlAlchemyStudyPlanRepository(session)
+            with pytest.raises(IntegrityError):
+                await repository.add_plan(
+                    NewStudyPlan(
+                        language_id="idioma-inexistente",
+                        goal="Objetivo sin idioma",
+                        frequency=2,
+                        daily_minutes=20,
+                    ),
+                    [],
                 )
             await session.rollback()
 
